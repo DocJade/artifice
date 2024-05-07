@@ -26,6 +26,7 @@
               extensions = [ "rust-src" ]; # include rust stdlib source code; allows you to "go to definition" on library functions
             })
             rust-analyzer
+	    openssl
           ];
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
         };
