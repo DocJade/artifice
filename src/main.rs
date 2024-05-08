@@ -65,6 +65,7 @@ async fn main() {
             tracing_subscriber::EnvFilter::builder()
                 .with_default_directive("artifice=info".parse().unwrap())
                 .with_default_directive("poise=warn".parse().unwrap())
+                .with_default_directive("serenity=warn".parse().unwrap())
                 .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
                 .from_env_lossy(),
         )
