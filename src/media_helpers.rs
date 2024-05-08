@@ -56,7 +56,8 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     // every arg gets a separate line for readability instead of an array.
 
     let mut output = FfmpegCommand::new()
-        //.hwaccel("auto")
+
+        .hwaccel("auto")
         .input(input.file_path.as_path().to_str().unwrap()) // input file
         .args([
             // set the dimensions
