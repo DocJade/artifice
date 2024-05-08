@@ -18,7 +18,7 @@ pub struct Job {
 
 impl Job {
     /// returns a new Job and the receiver half of the channel
-    pub fn new(parts: &[JobPart], id: serenity::InteractionId) -> (Self, mpsc::Receiver<()>) {
+    pub fn new(parts: &[JobPart], id: u64) -> (Self, mpsc::Receiver<()>) {
         let (tx, rx) = mpsc::channel(3);
         (
             Self {
@@ -27,6 +27,16 @@ impl Job {
                 tx,
             },
             rx,
+        )
+    }
+
+    pub fn single(ty: JobType, url: Arc<str>, id: u64) -> (Self, mpsc::Receiver<()>) {
+        Self::new(
+            &[JobPart {
+                subparts: [ty].into(),
+                download_url: url,
+            }],
+            id,
         )
     }
 
