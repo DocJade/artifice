@@ -64,6 +64,7 @@ dependencies = [
  "ffmpeg-sidecar",
  "flume",
  "poise",
+ "rand",
  "tempfile",
  "tokio",
  "tracing",
