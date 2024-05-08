@@ -9,8 +9,8 @@ use tokio::sync::mpsc;
 pub struct Job {
     /// if you upload multiple images each gets a JobPart
     parts: smallvec::SmallVec<[JobPart; 1]>,
-    /// interaction id that initiated this job; used for equality
-    id: serenity::InteractionId,
+    /// id that initiated this job; used for equality
+    id: u64,
     /// sender that the worker task will use to communicate with the command task
     /// #TODO `JobMessage` or something
     tx: mpsc::Sender<()>,
