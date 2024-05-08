@@ -15,7 +15,7 @@ pub struct Media {
     // the path to the temporary file
     file_path: PathBuf,
     // output path!
-    output_tempfile: tempfile::NamedTempFile
+    output_tempfile: Option<tempfile::NamedTempFile>
 }
 
 #[derive(Debug, PartialEq)]
@@ -48,7 +48,7 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     // Media is of a good size, now to process it.
 
     // create a tempfile to store the output.
-    let mut tempfile = NamedTempFile::new()?;
+    let tempfile = NamedTempFile::new()?;
     // where does that live
     let tempfile_path = tempfile.path();
 
@@ -58,18 +58,41 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     let mut output = FfmpegCommand::new()
     .hwaccel("auto")
     .input(input.file_path.as_path().to_str().unwrap()) // input file
-    .arg(format!("-s {}x{}", x_size, y_size)) // set the dimensions
+    .args([ // set the dimensions
+        "-vf",
+        &format!("scale={}:{}", x_size, y_size)
+    ]) 
     .codec_audio("copy") // copy audio codec
-    .output(tempfile_path.to_str().unwrap()) // where is it going?
+    //.output(tempfile_path.to_str().unwrap()) // where is it going?
+    .output(tempfile_path.to_str().unwrap())
     .spawn().unwrap(); // run that sucker
 
-    output.wait().unwrap(); // wait for that sucker to finish
+    output.wait()?; // wait for it to finish.
+    //TODO: make a helper that makes sure that FFMPEG didnt die.
 
     // now build our output
 
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: tempfile
+        output_tempfile: Some(tempfile)
     })
+}
+
+#[test]
+fn resize_test() {
+    ffmpeg_sidecar::download::auto_download().unwrap();
+    //get current path to src
+    let srcpath = env!("CARGO_MANIFEST_DIR");
+    // try resizing a few things
+    let baja_cat = Media {
+        file_path: format!("{}\\src\\test_files\\bajacat.png", srcpath).into(), //TODO: does this work on linux?
+        media_type: MediaType::Image,
+        output_tempfile: None
+    };
+    let result = resize_media(baja_cat, 128, 128);
+    match result {
+        Ok(media) => {},
+        Err(e) => panic!("{}", e),
+    }
 }

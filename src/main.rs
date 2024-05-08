@@ -15,6 +15,10 @@ pub struct Data {
     pub job_rx: flume::Receiver<Job>,
 }
 
+// import the commands
+mod commands;
+mod media_helpers; // for linting reasons
+
 impl Default for Data {
     fn default() -> Self {
         let (job_tx, job_rx) = flume::bounded(100);
