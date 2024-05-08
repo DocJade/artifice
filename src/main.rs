@@ -2,38 +2,50 @@ mod commands;
 mod job;
 
 use poise::serenity_prelude as serenity;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use tracing::info;
 
 use job::Job;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
+type Result<T = ()> = std::result::Result<T, Error>;
 
 // Custom user data passed to all command functions
 pub struct Data {
-    pub job_tx: flume::Sender<Job>,
-    pub job_rx: flume::Receiver<Job>,
+    pub job_queue: tokio::sync::RwLock<VecDeque<Job>>,
 }
 
 // import the commands
 
-mod media_helpers; // for linting reasons
-mod ffmpeg_babysitter; // ditto
+mod ffmpeg_babysitter;
+mod media_helpers; // for linting reasons // ditto
 
 impl Default for Data {
     fn default() -> Self {
-        let (job_tx, job_rx) = flume::bounded(100);
-        Self { job_tx, job_rx }
+        Self {
+            job_queue: Default::default(),
+        }
     }
 }
 
 impl Data {
-    pub async fn queue_push(&self, item: Job) -> Result<(), Error> {
-        self.job_tx.send_async(item).await?;
+    pub async fn queue_push(&self, job: Job) -> crate::Result {
+        let mut lock = self.job_queue.write().await;
+        lock.push_back(job);
         Ok(())
     }
-    pub async fn queue_pop(&self) -> Result<Job, Error> {
-        Ok(self.job_rx.recv_async().await?)
+    pub async fn queue_pop(&self) -> crate::Result<Option<Job>> {
+        let mut lock = self.job_queue.write().await;
+        Ok(lock.pop_front())
+    }
+    pub async fn get_position(&self, other: &Job) -> crate::Result<Option<usize>> {
+        let lock = self.job_queue.read().await;
+        for (i, job) in lock.iter().enumerate() {
+            if job == other {
+                return Ok(Some(i));
+            }
+        }
+        Ok(None)
     }
 }
 
