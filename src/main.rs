@@ -42,6 +42,9 @@ mod commands;
 #[tokio::main]
 async fn main() {
     info!("Artifice is starting...");
+    // Automatically set up FFMPEG
+    ffmpeg_sidecar::download::auto_download().unwrap();
+
     // pull in env variables
     dotenv::dotenv().ok();
     let token = std::env::var("TOKEN").expect("missing $TOKEN");
