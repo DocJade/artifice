@@ -1,11 +1,11 @@
 // media stuff!!
 
-use std::{ffi::OsStr, path::{Path, PathBuf}};
+use std::{ffi::OsStr, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 
 use rand::Rng;
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::TempDir;
 
 use crate::ffmpeg_babysitter::ffbabysit;
 
@@ -59,7 +59,7 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     // Do the actual resizing.
     // every arg gets a separate line for readability instead of an array.
 
-    let mut output = FfmpegCommand::new()
+    let output = FfmpegCommand::new()
         .hwaccel("auto")
         .input(input.file_path.as_path().to_str().unwrap()) // input file
         .args([
