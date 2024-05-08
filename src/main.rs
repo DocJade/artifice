@@ -1,12 +1,15 @@
-use std::collections::HashSet;
+mod commands;
+mod job;
 
 use poise::serenity_prelude as serenity;
+use std::collections::HashSet;
 use tracing::info;
+
+use job::Job;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 // Custom user data passed to all command functions
-#[derive(Debug)]
 pub struct Data {
     pub job_tx: flume::Sender<Job>,
     pub job_rx: flume::Receiver<Job>,
@@ -20,24 +23,16 @@ impl Default for Data {
 }
 
 impl Data {
-    pub async fn queue_push(&mut self, item: Job) -> Result<(), Error> {
+    pub async fn queue_push(&self, item: Job) -> Result<(), Error> {
         self.job_tx.send_async(item).await?;
         Ok(())
     }
-    pub async fn queue_pop(&mut self) -> Result<Job, Error> {
+    pub async fn queue_pop(&self) -> Result<Job, Error> {
         Ok(self.job_rx.recv_async().await?)
     }
 }
 
-#[derive(Debug)]
-pub enum Job {
-    // #TODO
-}
-
 type Context<'a> = poise::Context<'a, Data, Error>;
-
-// import the commands
-mod commands;
 
 #[tokio::main]
 async fn main() {
