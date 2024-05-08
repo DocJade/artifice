@@ -7,12 +7,12 @@ pub fn ffbabysit(mut baby: ffmpeg_sidecar::child::FfmpegChild) -> Option<crate::
     let result = baby.wait();
     if result.is_err() {
         // well shoot, we didn't even get to the ffmpeg logs!
-        return Some(result.expect_err("have error, so error...").into())
+        return Some(result.expect_err("have error, so error...").into());
     }
-    
+
     // now inquire, and just keep the errors.
     let possible_errors: Vec<String> = baby.iter().unwrap().filter_errors().collect();
-    
+
     // did any errors happen?
     if !possible_errors.is_empty() {
         // an error happened somewhere,
@@ -22,7 +22,7 @@ pub fn ffbabysit(mut baby: ffmpeg_sidecar::child::FfmpegChild) -> Option<crate::
             error_string.push_str(&error);
             error_string.push('\n');
         }
-        return Some(error_string.into())
+        return Some(error_string.into());
     }
     // otherwise, no errors happened! yay!
     None

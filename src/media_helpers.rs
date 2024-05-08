@@ -78,7 +78,7 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     // did that work?
     if let Some(babysitting_error) = waited {
         // no, it did not.
-        return Err(babysitting_error)
+        return Err(babysitting_error);
     }
 
     // now build our output
@@ -90,7 +90,6 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     })
 }
 
-
 // create a temporary output file in a tmp folder
 fn new_temp_media(extension: &OsStr) -> (TempDir, PathBuf) {
     // make a new file with a random name inside a temp folder
@@ -99,14 +98,16 @@ fn new_temp_media(extension: &OsStr) -> (TempDir, PathBuf) {
     // ! way to do this. #TODO: investigate?
 
     // generate some random numbers to serve as the filename
-    let mut file_name: [u8; 5] = [0,0,0,0,0];
+    let mut file_name: [u8; 5] = [0, 0, 0, 0, 0];
     rand::thread_rng().fill(&mut file_name);
     let stringed_name: String = file_name.iter().map(ToString::to_string).collect();
 
     // now make that temp file
     // Create a directory inside of `std::env::temp_dir()`.
     let dir = tempfile::tempdir().unwrap();
-    let file_path = dir.path().join(format!("{}.{}", stringed_name, extension.to_str().unwrap()));
+    let file_path = dir
+        .path()
+        .join(format!("{}.{}", stringed_name, extension.to_str().unwrap()));
 
     // Done!
     (dir, file_path)
@@ -147,7 +148,10 @@ fn resize_test() {
         let resize_result = resize_media(i, 128, 128);
         match resize_result {
             Ok(okay) => {
-                println!("Got output file at {}", okay.output_tempfile.unwrap().1.display());
+                println!(
+                    "Got output file at {}",
+                    okay.output_tempfile.unwrap().1.display()
+                );
             }
             Err(e) => {
                 // only the audio file should panic
