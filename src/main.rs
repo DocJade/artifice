@@ -8,16 +8,16 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 // Custom user data passed to all command functions
 #[derive(Debug, Default)]
 pub struct Data {
-    pub queue: tokio::sync::Mutex<std::collections::VecDeque<Job>>,
+    pub job_queue: tokio::sync::Mutex<std::collections::VecDeque<Job>>,
 }
 
 impl Data {
     pub async fn queue_pop(&mut self) {
-        let mut lock = self.queue.lock().await;
+        let mut lock = self.job_queue.lock().await;
         lock.pop_front();
     }
     pub async fn queue_push(&mut self, item: Job) {
-        let mut lock = self.queue.lock().await;
+        let mut lock = self.job_queue.lock().await;
         lock.push_back(item);
     }
 }
