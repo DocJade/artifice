@@ -1,7 +1,6 @@
 // return latency
 
 use crate::{Context, Error};
-use poise::serenity_prelude::Timestamp;
 
 /// Get the response time of Artifice
 #[poise::command(slash_command, guild_only)]
