@@ -43,7 +43,7 @@ impl Data {
     pub async fn get_position(&self, other: &Arc<Job>) -> crate::Result<Option<usize>> {
         let lock = self.job_queue.read().await;
         for (i, job) in lock.iter().enumerate() {
-            if job == other {
+            if job.id() == other.id() {
                 return Ok(Some(i));
             }
         }
