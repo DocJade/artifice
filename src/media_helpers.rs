@@ -18,7 +18,7 @@ pub struct Media {
     output_tempfile: Option<tempfile::NamedTempFile>
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum MediaType {
     Video,
     Gif,
@@ -90,9 +90,35 @@ fn resize_test() {
         media_type: MediaType::Image,
         output_tempfile: None
     };
-    let result = resize_media(baja_cat, 128, 128);
-    match result {
-        Ok(media) => {},
-        Err(e) => panic!("{}", e),
+    let jazz = Media {
+        file_path: format!("{}\\src\\test_files\\CC0-jazz-guitar.mp3", srcpath).into(), //TODO: does this work on linux?
+        media_type: MediaType::Audio,
+        output_tempfile: None
+    };
+    let factorio_gif = Media {
+        file_path: format!("{}\\src\\test_files\\factorio-test.gif", srcpath).into(), //TODO: does this work on linux?
+        media_type: MediaType::Gif,
+        output_tempfile: None
+    };
+    let video_test = Media {
+        file_path: format!("{}\\src\\test_files\\text-video-test.mp4", srcpath).into(), //TODO: does this work on linux?
+        media_type: MediaType::Video,
+        output_tempfile: None
+    };
+
+    // loop over the test files.
+    let testfiles = [baja_cat, jazz, factorio_gif, video_test];
+    for i in testfiles {
+        let m_type = i.media_type;
+        let resize_result = resize_media(i, 128, 128);
+        match resize_result {
+            Ok(_) => {},
+            Err(e) => {
+                // only the audio file should panic
+                if m_type != MediaType::Audio {
+                    panic!("{e}")
+                }
+            },
+        }
     }
 }
