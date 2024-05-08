@@ -44,6 +44,10 @@ impl Job {
     pub fn iter(&self) -> std::slice::Iter<JobPart> {
         self.parts.iter()
     }
+
+    pub fn id(&self) -> u64 {
+        self.id
+    }
 }
 
 impl PartialEq for Job {
