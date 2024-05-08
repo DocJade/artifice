@@ -1,10 +1,13 @@
 // media stuff!!
 
-use std::path::PathBuf;
+use std::{ffi::OsStr, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 
-use tempfile::NamedTempFile;
+use rand::Rng;
+use tempfile::TempDir;
+
+use crate::ffmpeg_babysitter::ffbabysit;
 
 // this is our main media type, all media is converted into this format before being passed to a function.
 
@@ -15,7 +18,7 @@ pub struct Media {
     // the path to the temporary file
     file_path: PathBuf,
     // output path!
-    output_tempfile: Option<tempfile::NamedTempFile>,
+    output_tempfile: Option<(TempDir, PathBuf)>, //TODO: Should this be moved into its own type?
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -47,16 +50,16 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
 
     // Media is of a good size, now to process it.
 
+    // get the extension of the input file
+    let extension = input.file_path.extension().unwrap();
+
     // create a tempfile to store the output.
-    let tempfile = NamedTempFile::new()?;
-    // where does that live
-    let tempfile_path = tempfile.path();
+    let (dir, filename) = new_temp_media(extension);
 
     // Do the actual resizing.
     // every arg gets a separate line for readability instead of an array.
 
-    let mut output = FfmpegCommand::new()
-
+    let output = FfmpegCommand::new()
         .hwaccel("auto")
         .input(input.file_path.as_path().to_str().unwrap()) // input file
         .args([
@@ -66,20 +69,48 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
         ])
         .codec_audio("copy") // copy audio codec
         //.output(tempfile_path.to_str().unwrap()) // where is it going?
-        .output(tempfile_path.to_str().unwrap())
+        .output(filename.to_str().unwrap())
         .spawn()
         .unwrap(); // run that sucker
 
-    output.wait()?; // wait for it to finish.
-                    //TODO: make a helper that makes sure that FFMPEG didnt die.
+    // wait for that to finish
+    let waited = ffbabysit(output);
+    // did that work?
+    if let Some(babysitting_error) = waited {
+        // no, it did not.
+        return Err(babysitting_error);
+    }
 
     // now build our output
 
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: Some(tempfile),
+        output_tempfile: Some((dir, filename)),
     })
+}
+
+// create a temporary output file in a tmp folder
+fn new_temp_media(extension: &OsStr) -> (TempDir, PathBuf) {
+    // make a new file with a random name inside a temp folder
+    // ! the TempDir is passed with the path to the file to ensure
+    // ! it does not go out of scope, but IDK if there is a better
+    // ! way to do this. #TODO: investigate?
+
+    // generate some random numbers to serve as the filename
+    let mut file_name: [u8; 5] = [0, 0, 0, 0, 0];
+    rand::thread_rng().fill(&mut file_name);
+    let stringed_name: String = file_name.iter().map(ToString::to_string).collect();
+
+    // now make that temp file
+    // Create a directory inside of `std::env::temp_dir()`.
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir
+        .path()
+        .join(format!("{}.{}", stringed_name, extension.to_str().unwrap()));
+
+    // Done!
+    (dir, file_path)
 }
 
 #[test]
@@ -113,9 +144,15 @@ fn resize_test() {
     let testfiles = [baja_cat, jazz, factorio_gif, video_test];
     for i in testfiles {
         let m_type = i.media_type;
+        println!("Running {}", i.file_path.display());
         let resize_result = resize_media(i, 128, 128);
         match resize_result {
-            Ok(_) => {}
+            Ok(okay) => {
+                println!(
+                    "Got output file at {}",
+                    okay.output_tempfile.unwrap().1.display()
+                );
+            }
             Err(e) => {
                 // only the audio file should panic
                 if m_type != MediaType::Audio {

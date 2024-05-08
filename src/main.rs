@@ -16,8 +16,9 @@ pub struct Data {
 }
 
 // import the commands
-mod commands;
+
 mod media_helpers; // for linting reasons
+mod ffmpeg_babysitter; // ditto
 
 impl Default for Data {
     fn default() -> Self {
