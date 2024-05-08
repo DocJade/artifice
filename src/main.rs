@@ -4,10 +4,29 @@ use poise::serenity_prelude as serenity;
 use tracing::info;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
+
 // Custom user data passed to all command functions
+#[derive(Debug, Default)]
 pub struct Data {
-    // nothing!
+    pub queue: tokio::sync::Mutex<std::collections::VecDeque<Job>>,
 }
+
+impl Data {
+    pub async fn queue_pop(&mut self) {
+        let mut lock = self.queue.lock().await;
+        lock.pop_front();
+    }
+    pub async fn queue_push(&mut self, item: Job) {
+        let mut lock = self.queue.lock().await;
+        lock.push_back(item);
+    }
+}
+
+#[derive(Debug)]
+pub enum Job {
+    // #TODO
+}
+
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 // import the commands
@@ -38,7 +57,7 @@ async fn main() {
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                Ok(Data::default())
             })
         })
         .build();
