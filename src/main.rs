@@ -6,19 +6,26 @@ use tracing::info;
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
 // Custom user data passed to all command functions
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Data {
-    pub job_queue: tokio::sync::Mutex<std::collections::VecDeque<Job>>,
+    pub job_tx: flume::Sender<Job>,
+    pub job_rx: flume::Receiver<Job>,
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        let (job_tx, job_rx) = flume::bounded(100);
+        Self { job_tx, job_rx }
+    }
 }
 
 impl Data {
-    pub async fn queue_pop(&mut self) {
-        let mut lock = self.job_queue.lock().await;
-        lock.pop_front();
+    pub async fn queue_push(&mut self, item: Job) -> Result<(), Error> {
+        self.job_tx.send_async(item).await?;
+        Ok(())
     }
-    pub async fn queue_push(&mut self, item: Job) {
-        let mut lock = self.job_queue.lock().await;
-        lock.push_back(item);
+    pub async fn queue_pop(&mut self) -> Result<Job, Error> {
+        Ok(self.job_rx.recv_async().await?)
     }
 }
 
