@@ -1,18 +1,42 @@
-use std::collections::HashSet;
+mod commands;
+mod job;
 
 use poise::serenity_prelude as serenity;
+use std::collections::HashSet;
 use tracing::info;
 
+use job::Job;
+
 type Error = Box<dyn std::error::Error + Send + Sync>;
+
 // Custom user data passed to all command functions
 pub struct Data {
-    // nothing!
+    pub job_tx: flume::Sender<Job>,
+    pub job_rx: flume::Receiver<Job>,
 }
-type Context<'a> = poise::Context<'a, Data, Error>;
 
 // import the commands
 mod commands;
-mod media_helpers;
+mod media_helpers; // for linting reasons
+
+impl Default for Data {
+    fn default() -> Self {
+        let (job_tx, job_rx) = flume::bounded(100);
+        Self { job_tx, job_rx }
+    }
+}
+
+impl Data {
+    pub async fn queue_push(&self, item: Job) -> Result<(), Error> {
+        self.job_tx.send_async(item).await?;
+        Ok(())
+    }
+    pub async fn queue_pop(&self) -> Result<Job, Error> {
+        Ok(self.job_rx.recv_async().await?)
+    }
+}
+
+type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() {
@@ -42,7 +66,7 @@ async fn main() {
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                Ok(Data::default())
             })
         })
         .build();
