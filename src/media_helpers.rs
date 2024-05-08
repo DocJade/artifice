@@ -15,7 +15,7 @@ pub struct Media {
     // the path to the temporary file
     file_path: PathBuf,
     // output path!
-    output_tempfile: Option<tempfile::NamedTempFile>
+    output_tempfile: Option<tempfile::NamedTempFile>,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -23,7 +23,7 @@ enum MediaType {
     Video,
     Gif,
     Image,
-    Audio
+    Audio,
 }
 
 pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, crate::Error> {
@@ -56,26 +56,28 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     // every arg gets a separate line for readability instead of an array.
 
     let mut output = FfmpegCommand::new()
-    //.hwaccel("auto")
-    .input(input.file_path.as_path().to_str().unwrap()) // input file
-    .args([ // set the dimensions
-        "-vf",
-        &format!("scale={}:{}", x_size, y_size)
-    ]) 
-    .codec_audio("copy") // copy audio codec
-    //.output(tempfile_path.to_str().unwrap()) // where is it going?
-    .output(tempfile_path.to_str().unwrap())
-    .spawn().unwrap(); // run that sucker
+        //.hwaccel("auto")
+        .input(input.file_path.as_path().to_str().unwrap()) // input file
+        .args([
+            // set the dimensions
+            "-vf",
+            &format!("scale={}:{}", x_size, y_size),
+        ])
+        .codec_audio("copy") // copy audio codec
+        //.output(tempfile_path.to_str().unwrap()) // where is it going?
+        .output(tempfile_path.to_str().unwrap())
+        .spawn()
+        .unwrap(); // run that sucker
 
     output.wait()?; // wait for it to finish.
-    //TODO: make a helper that makes sure that FFMPEG didnt die.
+                    //TODO: make a helper that makes sure that FFMPEG didnt die.
 
     // now build our output
 
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: Some(tempfile)
+        output_tempfile: Some(tempfile),
     })
 }
 
@@ -88,22 +90,22 @@ fn resize_test() {
     let baja_cat = Media {
         file_path: format!("{}\\src\\test_files\\bajacat.png", srcpath).into(), //TODO: does this work on linux?
         media_type: MediaType::Image,
-        output_tempfile: None
+        output_tempfile: None,
     };
     let jazz = Media {
         file_path: format!("{}\\src\\test_files\\CC0-jazz-guitar.mp3", srcpath).into(), //TODO: does this work on linux?
         media_type: MediaType::Audio,
-        output_tempfile: None
+        output_tempfile: None,
     };
     let factorio_gif = Media {
         file_path: format!("{}\\src\\test_files\\factorio-test.gif", srcpath).into(), //TODO: does this work on linux?
         media_type: MediaType::Gif,
-        output_tempfile: None
+        output_tempfile: None,
     };
     let video_test = Media {
         file_path: format!("{}\\src\\test_files\\text-video-test.mp4", srcpath).into(), //TODO: does this work on linux?
         media_type: MediaType::Video,
-        output_tempfile: None
+        output_tempfile: None,
     };
 
     // loop over the test files.
@@ -112,13 +114,13 @@ fn resize_test() {
         let m_type = i.media_type;
         let resize_result = resize_media(i, 128, 128);
         match resize_result {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 // only the audio file should panic
                 if m_type != MediaType::Audio {
                     panic!("{e}")
                 }
-            },
+            }
         }
     }
 }

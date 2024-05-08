@@ -5,6 +5,6 @@ use crate::commands::ping::ping;
 pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
     vec![
         // todo
-        ping()
+        ping(),
     ]
 }

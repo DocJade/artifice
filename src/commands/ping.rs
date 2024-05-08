@@ -7,7 +7,7 @@ use crate::{Context, Error};
 pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     // calculate response time
     // Yes we could just use the amount provided by discord, but this is more accurate.
-    
+
     // let time_now = Timestamp::now().timestamp_millis();
     // let time_sent = ctx.created_at().timestamp_millis();
     // let ping = time_now - time_sent;
