@@ -10,6 +10,9 @@ pub struct Data {
 }
 type Context<'a> = poise::Context<'a, Data, Error>;
 
+// import the commands
+mod commands;
+
 #[tokio::main]
 async fn main() {
     info!("Artifice is starting...");
@@ -20,11 +23,9 @@ async fn main() {
         | serenity::GatewayIntents::GUILD_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    // ignore the result; we just want to check we're connected
-
     let framework = poise::Framework::<Data, Error>::builder()
         .options(poise::FrameworkOptions {
-            // commands: TODO,
+            commands: commands::commands(),
             prefix_options: {
                 poise::PrefixFrameworkOptions {
                     mention_as_prefix: true,
