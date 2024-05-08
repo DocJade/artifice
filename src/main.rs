@@ -12,6 +12,7 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 // import the commands
 mod commands;
+mod media_helpers;
 
 #[tokio::main]
 async fn main() {
