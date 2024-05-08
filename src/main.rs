@@ -40,10 +40,10 @@ impl Data {
         let mut lock = self.job_queue.write().await;
         Ok(lock.pop_front())
     }
-    pub async fn get_position(&self, other: &Arc<Job>) -> crate::Result<Option<usize>> {
+    pub async fn get_position(&self, id: u64) -> crate::Result<Option<usize>> {
         let lock = self.job_queue.read().await;
         for (i, job) in lock.iter().enumerate() {
-            if job.id() == other.id() {
+            if job.id() == id {
                 return Ok(Some(i));
             }
         }
