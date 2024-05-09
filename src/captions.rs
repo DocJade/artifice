@@ -286,22 +286,22 @@ fn caption_test() {
 
     // caption some stuff!
     let baja_cat = Media {
-        file_path: format!("{}\\src\\test_files\\bajacat.png", src_path).into(),
+        file_path: format!("{}/src/test_files/bajacat.png", src_path).into(),
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: format!("{}\\src\\test_files\\CC0-jazz-guitar.mp3", src_path).into(),
+        file_path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", src_path).into(),
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: format!("{}\\src\\test_files\\factorio-test.gif", src_path).into(),
+        file_path: format!("{}/src/test_files/factorio-test.gif", src_path).into(),
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: format!("{}\\src\\test_files\\text-video-test.mp4", src_path).into(),
+        file_path: format!("{}/src/test_files/text-video-test.mp4", src_path).into(),
         media_type: MediaType::Video,
         output_tempfile: None,
     };
