@@ -11,7 +11,7 @@ use crate::{
     media_helpers::{new_temp_media, Media, MediaType},
 };
 
-pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
+pub fn caption(text: String, media: Media, bottom: bool) -> Result<Media, crate::Error> {
     // creates and adds a caption to every item in the media.
 
     if media.media_type == MediaType::Audio {
@@ -150,7 +150,7 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
 
         // create the image we are going to render into.
         let mut image: image::ImageBuffer<Rgba<u8>, Vec<u8>> =
-            DynamicImage::new_rgba8(size_x + 20, size_y + 20).to_rgba8(); //TODO: this padding (20) is temp.
+            DynamicImage::new_rgba8(size_x + 20, size_y + 20).to_rgba8(); // 20px of padding, because the size calculation isn't 100% accurate.
 
         // stolem!
         // Loop through the glyphs in the text, positing each one on a line
@@ -219,7 +219,7 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
             centered.into(),
             height_in.into(),
         );
-        // now increment the height in by the height of the image //TODO: we probably need padding here.
+        // now increment the height in by the height of the image
         height_in += layout_sizes[i].1;
     }
 
@@ -244,10 +244,22 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
 
     // now stack the image with ffmpeg
 
+    // put the two paths into a vec, we need to reverse them if this is a bottom caption
+    let mut inputs: Vec<&str> = vec![
+        temp_caption_filename.as_path().to_str().unwrap(),
+        media.file_path.as_path().to_str().unwrap()
+    ];
+
+    // is this a bottom caption?
+    if bottom {
+        // swap em
+        inputs.reverse();
+    }
+
     let output = FfmpegCommand::new()
         .hwaccel("auto")
-        .input(temp_caption_filename.as_path().to_str().unwrap()) // caption goes on top //TODO: bottom caption
-        .input(media.file_path.as_path().to_str().unwrap()) // input file
+        .input(inputs[0]) 
+        .input(inputs[1]) 
         .args([
             // stack the media
             "-filter_complex",
@@ -280,37 +292,37 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
 fn caption_test() {
     ffmpeg_sidecar::download::auto_download().unwrap();
     //get current path to src
-    let srcpath = env!("CARGO_MANIFEST_DIR");
+    let src_path = env!("CARGO_MANIFEST_DIR");
 
     // caption some stuff!
     let baja_cat = Media {
-        file_path: format!("{}\\src\\test_files\\bajacat.png", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}\\src\\test_files\\bajacat.png", src_path).into(),
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: format!("{}\\src\\test_files\\CC0-jazz-guitar.mp3", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}\\src\\test_files\\CC0-jazz-guitar.mp3", src_path).into(),
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: format!("{}\\src\\test_files\\factorio-test.gif", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}\\src\\test_files\\factorio-test.gif", src_path).into(),
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: format!("{}\\src\\test_files\\text-video-test.mp4", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}\\src\\test_files\\text-video-test.mp4", src_path).into(),
         media_type: MediaType::Video,
         output_tempfile: None,
     };
 
     // loop over the test files.
-    let testfiles = [baja_cat, jazz, factorio_gif, video_test];
-    for i in testfiles {
+    let test_files = [baja_cat, jazz, factorio_gif, video_test];
+    for i in test_files {
         let m_type = i.media_type;
         println!("Running {}", i.file_path.display());
-        let resize_result = caption("This is a test caption.".to_string(), i);
-        match resize_result {
+        let caption_result = caption("This is a test caption.".to_string(), i, false);
+        match caption_result {
             Ok(okay) => {
                 println!(
                     "Got output file at {}",
