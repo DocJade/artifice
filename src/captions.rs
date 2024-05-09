@@ -1,6 +1,6 @@
 // generate captions for images
 
-use std::{ffi::OsStr, path::PathBuf};
+use std::ffi::OsStr;
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 use image::{imageops, DynamicImage, Rgba};
