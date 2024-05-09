@@ -11,7 +11,7 @@ use crate::{
     media_helpers::{new_temp_media, Media, MediaType},
 };
 
-pub fn caption(text: String, media: Media, bottom: bool) -> Result<Media, crate::Error> {
+pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8), bg_color: (u8,u8,u8)) -> Result<Media, crate::Error> {
     // creates and adds a caption to every item in the media.
 
     if media.media_type == MediaType::Audio {
@@ -84,9 +84,6 @@ pub fn caption(text: String, media: Media, bottom: bool) -> Result<Media, crate:
 
     // set up the font scale
     let scale: Scale = Scale::uniform(font_size as f32);
-
-    // set the color of the font TODO: Color selection?
-    let fg_color: (u8, u8, u8) = (0, 0, 0);
 
     // no idea what this does, guessing its height related.
     let v_metrics = font.v_metrics(scale);
@@ -163,7 +160,7 @@ pub fn caption(text: String, media: Media, bottom: bool) -> Result<Media, crate:
                         x + bounding_box.min.x as u32,
                         y + bounding_box.min.y as u32,
                         // Turn the coverage into an alpha value
-                        Rgba([fg_color.0, fg_color.1, fg_color.2, (v * 255.0) as u8]),
+                        Rgba([text_color.0, text_color.1, text_color.2, (v * 255.0) as u8]),
                     )
                 });
             }
@@ -186,8 +183,8 @@ pub fn caption(text: String, media: Media, bottom: bool) -> Result<Media, crate:
     // total height, add padding as well. //TODO: separate top and bottom padding?
     let main_h: u32 = layout_sizes.iter().map(|y| y.1).sum::<u32>() + (side_padding * 2) as u32;
 
-    // make the new full white image.
-    let white: image::Rgba<u8> = image::Rgba([255, 255, 255, 255]);
+    // make the background image with the chosen color
+    let white: image::Rgba<u8> = image::Rgba([bg_color.0, bg_color.1, bg_color.2, 255]);
     let mut caption_image = ImageBuffer::from_pixel(main_w, main_h, white);
 
     // now add the images. making sure to center them.
@@ -310,7 +307,7 @@ fn caption_test() {
     for i in test_files {
         let m_type = i.media_type;
         println!("Running {}", i.file_path.display());
-        let caption_result = caption("This is a test caption.".to_string(), i, false);
+        let caption_result = caption("This is a test caption.".to_string(), i, false, (0,0,0), (255,255,255));
         match caption_result {
             Ok(okay) => {
                 println!(
