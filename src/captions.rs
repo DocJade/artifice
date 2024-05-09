@@ -3,7 +3,7 @@
 use std::ffi::OsStr;
 
 use ffmpeg_sidecar::command::FfmpegCommand;
-use image::{imageops, DynamicImage, Rgba};
+use image::{imageops, DynamicImage, ImageBuffer, Rgba};
 use rusttype::{point, Font, PositionedGlyph, Scale};
 
 use crate::{
@@ -186,23 +186,12 @@ pub fn caption(text: String, media: Media, bottom: bool) -> Result<Media, crate:
     // total height, add padding as well. //TODO: separate top and bottom padding?
     let main_h: u32 = layout_sizes.iter().map(|y| y.1).sum::<u32>() + (side_padding * 2) as u32;
 
-    // make the new image.
-    let mut caption_image = DynamicImage::new_rgb8(
-        // no need for transparency.
-        main_w, main_h,
-    )
-    .to_rgba8();
-
-    // fill it with white //TODO: is there a way to just make the image already white without filling it?
+    // make the new full white image.
     let white: image::Rgba<u8> = image::Rgba([255, 255, 255, 255]);
-    for y in 0..caption_image.height() {
-        for x in 0..caption_image.width() {
-            caption_image.put_pixel(x, y, white)
-        }
-    }
+    let mut caption_image = ImageBuffer::from_pixel(main_w, main_h, white);
 
     // now add the images. making sure to center them.
-
+    
     // middle of new big image
     let big_middle = main_w / 2;
 
