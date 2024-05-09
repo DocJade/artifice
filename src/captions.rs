@@ -71,6 +71,9 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
     if workable_character_width < 10 {
         // less than 10 characters wide is wild. no thanks.
         //TODO: In the future, this should rescale the image instead of failing, make it 2x wider or something
+        // TODO: It will recurse into self, so:
+        // run resize to resize image (2x? 4x?) then call itself again.
+
         return Err("Not wide enough to caption.".into());
     }
 
