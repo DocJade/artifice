@@ -3,10 +3,13 @@
 use std::{ffi::OsStr, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
-use rusttype::{point, Font, PositionedGlyph, Scale};
 use image::{imageops, DynamicImage, Rgba};
+use rusttype::{point, Font, PositionedGlyph, Scale};
 
-use crate::{ffmpeg_babysitter::ffbabysit, media_helpers::{new_temp_media, Media, MediaType}};
+use crate::{
+    ffmpeg_babysitter::ffbabysit,
+    media_helpers::{new_temp_media, Media, MediaType},
+};
 
 pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
     // creates and adds a caption to every item in the media.
@@ -21,7 +24,7 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
     if text.len() > MAX_LEN {
         return Err(format!("Caption cannot be longer than {} characters.", MAX_LEN).into());
     }
-    
+
     // now get the size of the media
 
     // ask ffprobe
@@ -32,11 +35,13 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
         // something broke
         Err(err) => {
             println!("ffprobe failed!");
-            return Err(format!("{:#?}", err).to_string().into())
-        },
+            return Err(format!("{:#?}", err).to_string().into());
+        }
     };
 
-    let media_x_res = media_info.streams[0].coded_width.expect("File had no width?");
+    let media_x_res = media_info.streams[0]
+        .coded_width
+        .expect("File had no width?");
     // let y_res = media_info.streams[0].coded_height.expect("File had no height?");
 
     // now process our text to wrap it into lines.
@@ -44,14 +49,14 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
     // based on our set font size, let's calculate how many characters wide our lines should be
 
     // const FONT_SIZE: u8 = 32;
-    
+
     // font size is based on the width of the image.
     let font_size = media_x_res / 16;
 
     let side_padding = media_x_res / 20;
 
     // how much width can we use?
-    let workable_width = media_x_res - (side_padding*2) as i64;
+    let workable_width = media_x_res - (side_padding * 2) as i64;
 
     // how many characters wide are we going to make our text?
     // this math was made up on the spot.
@@ -67,7 +72,6 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
         //TODO: In the future, this should rescale the image instead of failing, make it 2x wider or something
         return Err("Not wide enough to caption.".into());
     }
-
 
     let wrapped_text = textwrap::wrap(&text, workable_character_width as usize);
 
@@ -97,11 +101,13 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
         let text: String = line.into_owned();
 
         // rustfont has a nice auto-layout thing, but its only for one line at a time
-        let laid: Vec<PositionedGlyph> = font.layout(&text, scale, point(0.0,0.0 + v_metrics.ascent)).collect();
+        let laid: Vec<PositionedGlyph> = font
+            .layout(&text, scale, point(0.0, 0.0 + v_metrics.ascent))
+            .collect();
 
         // done.
         layouts.push(laid);
-    };
+    }
 
     // now we need to know how big each of those layouts is
     // width, height
@@ -143,7 +149,8 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
         // let center = layout_centers[i];
 
         // create the image we are going to render into.
-        let mut image: image::ImageBuffer<Rgba<u8>, Vec<u8>> = DynamicImage::new_rgba8(size_x + 20, size_y + 20).to_rgba8(); //TODO: this padding (20) is temp.
+        let mut image: image::ImageBuffer<Rgba<u8>, Vec<u8>> =
+            DynamicImage::new_rgba8(size_x + 20, size_y + 20).to_rgba8(); //TODO: this padding (20) is temp.
 
         // stolem!
         // Loop through the glyphs in the text, positing each one on a line
@@ -177,13 +184,14 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
     let main_w = media_x_res as u32;
 
     // total height, add padding as well. //TODO: separate top and bottom padding?
-    let main_h: u32 = layout_sizes.iter().map(|y| y.1).sum::<u32>() + (side_padding*2) as u32;
+    let main_h: u32 = layout_sizes.iter().map(|y| y.1).sum::<u32>() + (side_padding * 2) as u32;
 
     // make the new image.
-    let mut caption_image = DynamicImage::new_rgb8( // no need for transparency.
-        main_w, 
-        main_h 
-    ).to_rgba8();
+    let mut caption_image = DynamicImage::new_rgb8(
+        // no need for transparency.
+        main_w, main_h,
+    )
+    .to_rgba8();
 
     // fill it with white //TODO: is there a way to just make the image already white without filling it?
     let white: image::Rgba<u8> = image::Rgba([255, 255, 255, 255]);
@@ -199,13 +207,18 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
     let big_middle = main_w / 2;
 
     // current height offset
-    let mut height_in:u32 = side_padding as u32; // start with a little padding.
+    let mut height_in: u32 = side_padding as u32; // start with a little padding.
 
     for i in 0..line_images.len() {
         // place the image
         // get the centered alignment
         let centered = big_middle - layout_centers[i];
-        imageops::overlay(&mut caption_image, &line_images[i], centered.into(), height_in.into());
+        imageops::overlay(
+            &mut caption_image,
+            &line_images[i],
+            centered.into(),
+            height_in.into(),
+        );
         // now increment the height in by the height of the image //TODO: we probably need padding here.
         height_in += layout_sizes[i].1;
     }
@@ -238,7 +251,7 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
         .args([
             // stack the media
             "-filter_complex",
-            "vstack=inputs=2"
+            "vstack=inputs=2",
         ])
         .codec_audio("copy") // copy audio codec
         //.output(tempfile_path.to_str().unwrap()) // where is it going?
@@ -262,7 +275,6 @@ pub fn caption(text: String, media: Media) -> Result<Media, crate::Error> {
         output_tempfile: Some((dir, ffmpeg_filename)),
     })
 }
-
 
 #[test]
 fn caption_test() {
