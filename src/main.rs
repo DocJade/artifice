@@ -19,6 +19,7 @@ pub struct Data {
 
 mod ffmpeg_babysitter;
 mod media_helpers; // for linting reasons // ditto
+mod captions;
 
 impl Default for Data {
     fn default() -> Self {

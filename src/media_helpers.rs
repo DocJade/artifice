@@ -14,15 +14,15 @@ use crate::ffmpeg_babysitter::ffbabysit;
 #[derive(Debug)]
 pub struct Media {
     // The type of the media
-    media_type: MediaType,
+    pub media_type: MediaType,
     // the path to the temporary file
-    file_path: PathBuf,
+    pub file_path: PathBuf,
     // output path!
-    output_tempfile: Option<(TempDir, PathBuf)>, //TODO: Should this be moved into its own type?
+    pub output_tempfile: Option<(TempDir, PathBuf)>, //TODO: Should this be moved into its own type?
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum MediaType {
+pub enum MediaType {
     Video,
     Gif,
     Image,
@@ -91,7 +91,7 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
 }
 
 // create a temporary output file in a tmp folder
-fn new_temp_media(extension: &OsStr) -> (TempDir, PathBuf) {
+pub fn new_temp_media(extension: &OsStr) -> (TempDir, PathBuf) {
     // make a new file with a random name inside a temp folder
     // ! the TempDir is passed with the path to the file to ensure
     // ! it does not go out of scope, but IDK if there is a better
