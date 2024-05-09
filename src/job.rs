@@ -2,39 +2,42 @@
 use std::sync::Arc;
 
 use poise::serenity_prelude as serenity;
+use tokio::sync::mpsc;
 
 /// a bunch of work that we need to do to respond to a given interaction
 #[derive(Debug, Clone)]
 pub struct Job {
     /// if you upload multiple images each gets a JobPart
     parts: smallvec::SmallVec<[JobPart; 1]>,
-    /// interaction which initiated this job
-    interaction: Arc<serenity::CommandInteraction>,
-    /// http object used for replying
-    http: Arc<serenity::Http>,
+    /// id that initiated this job; used for equality
+    id: u64,
+    /// sender that the worker task will use to communicate with the command task
+    /// #TODO `JobMessage` or something
+    tx: mpsc::Sender<JobMessage>,
 }
 
 impl Job {
-    pub fn new(
-        parts: &[JobPart],
-        interaction: Arc<serenity::CommandInteraction>,
-        http: Arc<serenity::Http>,
-    ) -> Self {
-        Self {
-            parts: parts.into(),
-            interaction,
-            http,
-        }
+    /// returns a new Job and the receiver half of the channel
+    pub fn new(parts: &[JobPart], id: u64) -> (Self, mpsc::Receiver<JobMessage>) {
+        let (tx, rx) = mpsc::channel(3);
+        (
+            Self {
+                parts: parts.into(),
+                id,
+                tx,
+            },
+            rx,
+        )
     }
 
-    /// get the [`CommandInteraction`] which initiated this job
-    pub fn interaction(&self) -> Arc<serenity::CommandInteraction> {
-        self.interaction.clone()
-    }
-
-    /// get the http object
-    pub fn http(&self) -> Arc<serenity::Http> {
-        self.http.clone()
+    pub fn single(ty: JobType, url: Arc<str>, id: u64) -> (Self, mpsc::Receiver<JobMessage>) {
+        Self::new(
+            &[JobPart {
+                subparts: [ty].into(),
+                download_url: url,
+            }],
+            id,
+        )
     }
 
     /// iterate over the parts
@@ -42,24 +45,14 @@ impl Job {
         self.parts.iter()
     }
 
-    /// `position` counts *down*
-    pub async fn post_queue_position(&self, position: usize) -> Result<(), crate::Error> {
-        self.interaction()
-            .create_response(
-                self.http(),
-                serenity::CreateInteractionResponse::Message(
-                    serenity::CreateInteractionResponseMessage::new()
-                        .content(format!("Queue Position: {}", position)),
-                ),
-            )
-            .await?;
-        Ok(())
+    pub fn id(&self) -> u64 {
+        self.id
     }
 }
 
 impl PartialEq for Job {
     fn eq(&self, other: &Self) -> bool {
-        self.interaction.id == other.interaction.id
+        self.id == other.id
     }
 }
 
@@ -78,4 +71,10 @@ pub enum JobType {
     Resize { width: u16, height: u16 },
     Caption { text: String },
     // #TODO
+}
+
+pub enum JobMessage {
+    /// nonspecific information which will just be sent as a discord message.
+    /// mostly for debugging
+    Information(String),
 }

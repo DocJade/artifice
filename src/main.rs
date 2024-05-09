@@ -2,8 +2,10 @@ mod commands;
 mod job;
 
 use poise::serenity_prelude as serenity;
-use std::collections::{HashSet, VecDeque};
-use tracing::info;
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+};
 
 use job::Job;
 
@@ -12,7 +14,7 @@ type Result<T = ()> = std::result::Result<T, Error>;
 
 // Custom user data passed to all command functions
 pub struct Data {
-    pub job_queue: tokio::sync::RwLock<VecDeque<Job>>,
+    pub job_queue: tokio::sync::RwLock<VecDeque<Arc<Job>>>,
 }
 
 // import the commands
@@ -30,19 +32,19 @@ impl Default for Data {
 }
 
 impl Data {
-    pub async fn queue_push(&self, job: Job) -> crate::Result {
+    pub async fn queue_push(&self, job: Arc<Job>) -> crate::Result {
         let mut lock = self.job_queue.write().await;
         lock.push_back(job);
         Ok(())
     }
-    pub async fn queue_pop(&self) -> crate::Result<Option<Job>> {
+    pub async fn queue_pop(&self) -> crate::Result<Option<Arc<Job>>> {
         let mut lock = self.job_queue.write().await;
         Ok(lock.pop_front())
     }
-    pub async fn get_position(&self, other: &Job) -> crate::Result<Option<usize>> {
+    pub async fn get_position(&self, id: u64) -> crate::Result<Option<usize>> {
         let lock = self.job_queue.read().await;
         for (i, job) in lock.iter().enumerate() {
-            if job == other {
+            if job.id() == id {
                 return Ok(Some(i));
             }
         }
@@ -54,17 +56,28 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
 async fn main() {
-    info!("Artifice is starting...");
-    // Automatically set up FFMPEG
-    ffmpeg_sidecar::download::auto_download().unwrap();
-
     // pull in env variables
     dotenv::dotenv().ok();
+    tracing_subscriber::fmt()
+        .without_time()
+        .with_file(true)
+        .with_line_number(true)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::builder()
+                .with_default_directive("artifice=info".parse().unwrap())
+                .with_default_directive("poise=warn".parse().unwrap())
+                .with_default_directive("serenity=warn".parse().unwrap())
+                .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
+    tracing::info!("Artifice is starting...");
+    // Automatically set up FFMPEG
+    ffmpeg_sidecar::download::auto_download().unwrap();
     let token = std::env::var("TOKEN").expect("missing $TOKEN");
     let intents = serenity::GatewayIntents::non_privileged()
         | serenity::GatewayIntents::GUILD_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
-
     let framework = poise::Framework::<Data, Error>::builder()
         .options(poise::FrameworkOptions {
             commands: commands::commands(),
