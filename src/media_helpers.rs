@@ -120,22 +120,22 @@ fn resize_test() {
     let srcpath = env!("CARGO_MANIFEST_DIR");
     // try resizing a few things
     let baja_cat = Media {
-        file_path: format!("{}/src/test_files/bajacat.png", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}/src/test_files/bajacat.png", srcpath).into(),
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into(),
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: format!("{}/src/test_files/factorio-test.gif", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}/src/test_files/factorio-test.gif", srcpath).into(),
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into(), //TODO: does this work on linux?
+        file_path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into(),
         media_type: MediaType::Video,
         output_tempfile: None,
     };
