@@ -53,10 +53,11 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
     // font size is based on the width of the image.
     let font_size = media_x_res / 16;
 
-    let side_padding = media_x_res / 20;
+    let left_right_padding = media_x_res / 20;
+    let top_bottom_padding = media_x_res / 30;
 
     // how much width can we use?
-    let workable_width = media_x_res - (side_padding * 2) as i64;
+    let workable_width = media_x_res - (left_right_padding * 2) as i64;
 
     // how many characters wide are we going to make our text?
     // this math was made up on the spot.
@@ -180,8 +181,8 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
     // actually we dont care, just make it the width of the input
     let main_w = media_x_res as u32;
 
-    // total height, add padding as well. //TODO: separate top and bottom padding?
-    let main_h: u32 = layout_sizes.iter().map(|y| y.1).sum::<u32>() + (side_padding * 2) as u32;
+    // total height, add padding as well.
+    let main_h: u32 = layout_sizes.iter().map(|y| y.1).sum::<u32>() + (top_bottom_padding * 2) as u32;
 
     // make the background image with the chosen color
     let white: image::Rgba<u8> = image::Rgba([bg_color.0, bg_color.1, bg_color.2, 255]);
@@ -193,7 +194,7 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
     let big_middle = main_w / 2;
 
     // current height offset
-    let mut height_in: u32 = side_padding as u32; // start with a little padding.
+    let mut height_in: u32 = left_right_padding as u32; // start with a little padding.
 
     for i in 0..line_images.len() {
         // place the image
