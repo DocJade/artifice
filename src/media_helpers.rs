@@ -74,15 +74,9 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
         .unwrap(); // run that sucker
 
     // wait for that to finish
-    let waited = ffbabysit(output);
-    // did that work?
-    if let Some(babysitting_error) = waited {
-        // no, it did not.
-        return Err(babysitting_error);
-    }
+    ffbabysit(output)?;
 
     // now build our output
-
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,

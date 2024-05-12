@@ -11,7 +11,13 @@ use crate::{
     media_helpers::{new_temp_media, Media, MediaType},
 };
 
-pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8), bg_color: (u8,u8,u8)) -> Result<Media, crate::Error> {
+pub fn caption(
+    text: String,
+    media: Media,
+    bottom: bool,
+    text_color: (u8, u8, u8),
+    bg_color: (u8, u8, u8),
+) -> Result<Media, crate::Error> {
     // creates and adds a caption to every item in the media.
 
     if media.media_type == MediaType::Audio {
@@ -185,14 +191,15 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
     let main_w = media_x_res as u32;
 
     // total height, add padding as well.
-    let main_h: u32 = layout_sizes.iter().map(|y| y.1).sum::<u32>() + (top_bottom_padding * 2) as u32;
+    let main_h: u32 =
+        layout_sizes.iter().map(|y| y.1).sum::<u32>() + (top_bottom_padding * 2) as u32;
 
     // make the background image with the chosen color
     let white: image::Rgba<u8> = image::Rgba([bg_color.0, bg_color.1, bg_color.2, 255]);
     let mut caption_image = ImageBuffer::from_pixel(main_w, main_h, white);
 
     // now add the images. making sure to center them.
-    
+
     // middle of new big image
     let big_middle = main_w / 2;
 
@@ -237,7 +244,7 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
     // put the two paths into a vec, we need to reverse them if this is a bottom caption
     let mut inputs: Vec<&str> = vec![
         temp_caption_filename.as_path().to_str().unwrap(),
-        media.file_path.as_path().to_str().unwrap()
+        media.file_path.as_path().to_str().unwrap(),
     ];
 
     // is this a bottom caption?
@@ -248,8 +255,8 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
 
     let output = FfmpegCommand::new()
         .hwaccel("auto")
-        .input(inputs[0]) 
-        .input(inputs[1]) 
+        .input(inputs[0])
+        .input(inputs[1])
         .args([
             // stack the media
             "-filter_complex",
@@ -262,15 +269,8 @@ pub fn caption(text: String, media: Media, bottom: bool, text_color: (u8,u8,u8),
         .unwrap(); // run that sucker
 
     // wait for that to finish
-    let waited = ffbabysit(output);
-    // did that work?
-    if let Some(babysitting_error) = waited {
-        // no, it did not.
-        return Err(babysitting_error);
-    }
-
+    ffbabysit(output)?;
     // now build our output!
-
     Ok(Media {
         media_type: media.media_type,
         file_path: media.file_path,
@@ -311,7 +311,13 @@ fn caption_test() {
     for i in test_files {
         let m_type = i.media_type;
         println!("Running {}", i.file_path.display());
-        let caption_result = caption("This is a test caption.".to_string(), i, false, (0,0,0), (255,255,255));
+        let caption_result = caption(
+            "This is a test caption.".to_string(),
+            i,
+            false,
+            (0, 0, 0),
+            (255, 255, 255),
+        );
         match caption_result {
             Ok(okay) => {
                 println!(
