@@ -53,6 +53,7 @@ pub async fn resize(ctx: Context<'_>, width: u16, height: u16, url: String) -> R
     let handle = ctx.reply("working...").await?;
     poll_queue(handle, ctx.clone(), ctx.data(), job.id).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
+    assert_eq!(Some(job.id), ctx.data().queue_pop().await?);
     // ... do ffmpeg stuff ...
     Ok(())
 }
