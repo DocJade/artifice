@@ -7,14 +7,15 @@ use std::{
     sync::Arc,
 };
 
-use job::Job;
+use job::JobId;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Result<T = ()> = std::result::Result<T, Error>;
 
 // Custom user data passed to all command functions
 pub struct Data {
-    pub job_queue: tokio::sync::RwLock<VecDeque<Arc<Job>>>,
+    pub job_queue: tokio::sync::RwLock<VecDeque<JobId>>,
+    pub job_semaphore: tokio::sync::Semaphore,
 }
 
 // import the commands
@@ -27,24 +28,25 @@ impl Default for Data {
     fn default() -> Self {
         Self {
             job_queue: Default::default(),
+            job_semaphore: tokio::sync::Semaphore::new(2),
         }
     }
 }
 
 impl Data {
-    pub async fn queue_push(&self, job: Arc<Job>) -> crate::Result {
+    pub async fn queue_push(&self, job: JobId) -> crate::Result {
         let mut lock = self.job_queue.write().await;
         lock.push_back(job);
         Ok(())
     }
-    pub async fn queue_pop(&self) -> crate::Result<Option<Arc<Job>>> {
+    pub async fn queue_pop(&self) -> crate::Result<Option<JobId>> {
         let mut lock = self.job_queue.write().await;
         Ok(lock.pop_front())
     }
-    pub async fn get_position(&self, id: u64) -> crate::Result<Option<usize>> {
+    pub async fn get_position(&self, other: JobId) -> crate::Result<Option<usize>> {
         let lock = self.job_queue.read().await;
         for (i, job) in lock.iter().enumerate() {
-            if job.id() == id {
+            if *job == other {
                 return Ok(Some(i));
             }
         }
