@@ -1,52 +1,28 @@
 #![allow(dead_code)]
 use std::sync::Arc;
 
-use poise::serenity_prelude as serenity;
-use tokio::sync::mpsc;
+#[derive(Clone, Copy, Debug, bevy_derive::Deref, PartialEq, Eq)]
+pub struct JobId(pub u64);
 
 /// a bunch of work that we need to do to respond to a given interaction
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct Job {
-    /// if you upload multiple images each gets a JobPart
-    parts: smallvec::SmallVec<[JobPart; 1]>,
     /// id that initiated this job; used for equality
-    id: u64,
-    /// sender that the worker task will use to communicate with the command task
-    /// #TODO `JobMessage` or something
-    tx: mpsc::Sender<JobMessage>,
+    pub id: JobId,
+    /// if you upload multiple images each gets a JobPart
+    pub parts: smallvec::SmallVec<[JobPart; 1]>,
 }
 
 impl Job {
-    /// returns a new Job and the receiver half of the channel
-    pub fn new(parts: &[JobPart], id: u64) -> (Self, mpsc::Receiver<JobMessage>) {
-        let (tx, rx) = mpsc::channel(3);
-        (
-            Self {
-                parts: parts.into(),
-                id,
-                tx,
-            },
-            rx,
-        )
-    }
-
-    pub fn single(ty: JobType, url: Arc<str>, id: u64) -> (Self, mpsc::Receiver<JobMessage>) {
-        Self::new(
-            &[JobPart {
+    pub fn new_simple(ty: JobType, url: Arc<str>, id: JobId) -> Job {
+        Self {
+            parts: [JobPart {
                 subparts: [ty].into(),
                 download_url: url,
-            }],
+            }]
+            .into(),
             id,
-        )
-    }
-
-    /// iterate over the parts
-    pub fn iter(&self) -> std::slice::Iter<JobPart> {
-        self.parts.iter()
-    }
-
-    pub fn id(&self) -> u64 {
-        self.id
+        }
     }
 }
 
@@ -55,8 +31,6 @@ impl PartialEq for Job {
         self.id == other.id
     }
 }
-
-impl Eq for Job {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct JobPart {
@@ -71,10 +45,4 @@ pub enum JobType {
     Resize { width: u16, height: u16 },
     Caption { text: String },
     // #TODO
-}
-
-pub enum JobMessage {
-    /// nonspecific information which will just be sent as a discord message.
-    /// mostly for debugging
-    Information(String),
 }
