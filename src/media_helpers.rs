@@ -1,13 +1,22 @@
 // media stuff!!
 
+extern crate reqwest;
+use std::fs::File;
+use std::io::{self, Write};
 use std::{ffi::OsStr, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 
+use poise::serenity_prelude::{MessageId, MessagePagination};
 use rand::Rng;
 use tempfile::TempDir;
+use tracing::info;
 
 use crate::ffmpeg_babysitter::ffbabysit;
+
+use crate::Context;
+
+use poise::serenity_prelude::model::prelude::Message;
 
 // this is our main media type, all media is converted into this format before being passed to a function.
 
@@ -16,9 +25,15 @@ pub struct Media {
     // The type of the media
     pub media_type: MediaType,
     // the path to the temporary file
-    pub file_path: PathBuf,
+    pub file_path: TempFileHolder,
     // output path!
-    pub output_tempfile: Option<(TempDir, PathBuf)>, //TODO: Should this be moved into its own type?
+    pub output_tempfile: Option<TempFileHolder>,
+}
+
+#[derive(Debug)]
+pub struct TempFileHolder {
+    pub dir: TempDir,
+    pub path: PathBuf
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -27,6 +42,36 @@ pub enum MediaType {
     Gif,
     Image,
     Audio,
+    Unknown
+}
+
+impl MediaType {
+    pub fn from(thingie: String) -> Option<MediaType> {
+        // dafuq is this
+        // did we get anything?
+        if thingie.is_empty() {
+            // no stuffs
+            return None
+        }
+
+        // what kinda mf file is this
+        return match thingie.split('/').next().unwrap() {
+            "video" => Some(MediaType::Video),
+            "audio" => Some(MediaType::Audio),
+            "image" => {
+                // is this a gif?
+                if thingie.split('/').last().unwrap() == "gif" {
+                    // yes
+                    Some(MediaType::Gif)
+                } else {
+                    // erm no
+                    Some(MediaType::Image)
+                }
+            },
+            other => None
+        };
+        
+    }
 }
 
 pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, crate::Error> {
@@ -51,17 +96,17 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     // Media is of a good size, now to process it.
 
     // get the extension of the input file
-    let extension = input.file_path.extension().unwrap();
+    let extension = input.file_path.path.extension().unwrap();
 
     // create a tempfile to store the output.
-    let (dir, filename) = new_temp_media(extension);
+    let dir = new_temp_media(extension);
 
     // Do the actual resizing.
     // every arg gets a separate line for readability instead of an array.
 
     let output = FfmpegCommand::new()
         .hwaccel("auto")
-        .input(input.file_path.as_path().to_str().unwrap()) // input file
+        .input(input.file_path.path.as_path().to_str().unwrap()) // input file
         .args([
             // set the dimensions
             "-vf",
@@ -69,7 +114,7 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
         ])
         .codec_audio("copy") // copy audio codec
         //.output(tempfile_path.to_str().unwrap()) // where is it going?
-        .output(filename.to_str().unwrap())
+        .output(dir.path.to_str().unwrap())
         .spawn()
         .unwrap(); // run that sucker
 
@@ -77,15 +122,19 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     ffbabysit(output)?;
 
     // now build our output
+
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: Some((dir, filename)),
+        output_tempfile: Some(TempFileHolder{
+            dir: dir.dir, // durrrrr
+            path: dir.path,
+        }),
     })
 }
 
 // create a temporary output file in a tmp folder
-pub fn new_temp_media(extension: &OsStr) -> (TempDir, PathBuf) {
+pub fn new_temp_media(extension: &OsStr) -> TempFileHolder {
     // make a new file with a random name inside a temp folder
     // ! the TempDir is passed with the path to the file to ensure
     // ! it does not go out of scope, but IDK if there is a better
@@ -104,7 +153,105 @@ pub fn new_temp_media(extension: &OsStr) -> (TempDir, PathBuf) {
         .join(format!("{}.{}", stringed_name, extension.to_str().unwrap()));
 
     // Done!
-    (dir, file_path)
+    TempFileHolder {
+        dir,
+        path: file_path
+    }
+}
+
+// create a temporary folder by itself.
+// just a shortcut.
+pub fn new_temp_dir() -> TempDir {
+    return tempfile::tempdir().unwrap();
+}
+
+// looks for a media file in the chat history.
+pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
+    // TODO: gifs from tenor.
+    info!("Looking for media...");
+    // now we shall take that mf context and look for some media
+    let channel_id: poise::serenity_prelude::model::prelude::ChannelId = ctx.channel_id();
+    let http = ctx.http();
+    // get the message id that this context came from
+    let start: MessageId = ctx.id().into();
+
+    let search_params: MessagePagination = MessagePagination::Before(start);
+    // get the last 50 messages
+    let messages: Vec<Message> = http.get_messages(channel_id, Some(search_params), Some(50)).await?; // TODO: is this too many messages????!?!??!
+    info!("Got 50 messages...");
+
+    let mut url: String = String::new();
+    let mut media_type: MediaType = MediaType::Unknown;
+
+    // do these messages have media tho
+    for msg in messages {
+        if msg.attachments.len() == 1 {
+            info!("Found a message with media!");
+            // wowie boys we got medias
+            let find_type = msg.attachments.first().unwrap().content_type.as_ref().unwrap().clone();
+            info!("{find_type}");
+
+            // is this a thing we can actually use
+            let maybe_media_type = MediaType::from(find_type);
+            // can we use it?
+            if maybe_media_type.is_none() {
+                // nuh uh
+                info!("...but it was something we couldn't use.");
+                continue;
+            }
+            info!("Good media file!");
+            // cool we can use it!
+            media_type = maybe_media_type.unwrap();
+            url = msg.attachments.first().unwrap().url.clone();
+            break
+        }
+    }
+    info!("Finished looping over messages...");
+
+    // got anything?
+    if url.is_empty() || media_type == MediaType::Unknown {
+        // no :(
+            info!("didn't find anything.");
+        return Ok(None)
+    }
+
+    // ok cool we got a media, time to download it
+
+    // first, get a folder to store it
+    let tempdir = new_temp_dir();
+
+    // now actually download the file
+    info!("Downloading a media file...");
+    let resp = reqwest::get(url.clone()).await?;
+
+    // split out the filename
+    // TODO: cleanup?
+    let filename = url
+    .split('/')
+    .last()
+    .unwrap()
+    .split('?')
+    .next()
+    .unwrap();
+
+    // Create the target file path within the folder
+    let file_path = tempdir.path().join(filename);
+    info!("{}",file_path.to_str().unwrap());
+    
+    // Get the response body as bytes
+    let data = resp.bytes().await?;
+    
+    // Open the target file for writing
+    let mut out = File::create(file_path.clone())?;
+    
+    // Copy downloaded data to the file
+    out.write_all(&data)?;
+    
+    // in theory we have the file now.
+    info!("Finished downloading {}", filename);
+
+    // return that sucker!
+    Ok(Some(Media { media_type, file_path: TempFileHolder { dir: tempdir, path: file_path.into() }, output_tempfile: None }))
 }
 
 #[test]
@@ -114,22 +261,22 @@ fn resize_test() {
     let srcpath = env!("CARGO_MANIFEST_DIR");
     // try resizing a few things
     let baja_cat = Media {
-        file_path: format!("{}/src/test_files/bajacat.png", srcpath).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", srcpath).into() },
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into() },
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: format!("{}/src/test_files/factorio-test.gif", srcpath).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", srcpath).into() },
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into() },
         media_type: MediaType::Video,
         output_tempfile: None,
     };
@@ -138,13 +285,13 @@ fn resize_test() {
     let testfiles = [baja_cat, jazz, factorio_gif, video_test];
     for i in testfiles {
         let m_type = i.media_type;
-        println!("Running {}", i.file_path.display());
+        println!("Running {}", i.file_path.path.display());
         let resize_result = resize_media(i, 128, 128);
         match resize_result {
             Ok(okay) => {
                 println!(
                     "Got output file at {}",
-                    okay.output_tempfile.unwrap().1.display()
+                    okay.output_tempfile.unwrap().path.display()
                 );
             }
             Err(e) => {
