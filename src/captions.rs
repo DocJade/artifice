@@ -12,7 +12,7 @@ use crate::{
     media_helpers::{new_temp_media, Media, MediaType, TempFileHolder},
 };
 
-pub fn caption(
+pub fn caption_media(
     text: String,
     media: Media,
     bottom: bool,
@@ -20,6 +20,9 @@ pub fn caption(
     bg_color: (u8, u8, u8),
 ) -> Result<Media, crate::Error> {
     // creates and adds a caption to every item in the media.
+
+    // TODO: make a test that tries a bunch of sizes of media to make sure
+    // none of them crash (generating images from scratch is possible with ffmpeg)
 
     if media.media_type == MediaType::Audio {
         // we cant caption audio.
@@ -58,7 +61,7 @@ pub fn caption(
     // const FONT_SIZE: u8 = 32;
 
     // font size is based on the width of the image.
-    let font_size = media_x_res / 16;
+    let font_size = media_x_res / 8;
 
     let left_right_padding = media_x_res / 20;
     let top_bottom_padding = media_x_res / 30;
@@ -210,6 +213,7 @@ pub fn caption(
     for i in 0..line_images.len() {
         // place the image
         // get the centered alignment
+        // TODO: this can subtract with overflow.
         let centered = big_middle - layout_centers[i];
         imageops::overlay(
             &mut caption_image,
