@@ -14,11 +14,11 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn new_simple(ty: JobType, url: Arc<str>, id: JobId) -> Job {
+    pub fn new_simple(ty: JobType, /* url: Arc<str>, */ id: JobId) -> Job {
         Self {
             parts: [JobPart {
                 subparts: [ty].into(),
-                download_url: url,
+                // download_url: url,
             }]
             .into(),
             id,
@@ -36,8 +36,8 @@ impl PartialEq for Job {
 pub struct JobPart {
     /// if you chain multiple actions each gets an entry here
     pub subparts: smallvec::SmallVec<[JobType; 1]>,
-    /// URL to download the first image/whatever from
-    pub download_url: Arc<str>,
+    // /// URL to download the first image/whatever from
+    // pub download_url: Arc<str>, // bad idea! -Doc
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

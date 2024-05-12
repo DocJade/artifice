@@ -5,10 +5,11 @@ use std::ffi::OsStr;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use image::{imageops, DynamicImage, ImageBuffer, Rgba};
 use rusttype::{point, Font, PositionedGlyph, Scale};
+use tempfile::TempDir;
 
 use crate::{
     ffmpeg_babysitter::ffbabysit,
-    media_helpers::{new_temp_media, Media, MediaType},
+    media_helpers::{new_temp_media, Media, MediaType, TempFileHolder},
 };
 
 pub fn caption(
@@ -35,7 +36,7 @@ pub fn caption(
 
     // ask ffprobe
 
-    let media_info = match ffprobe::ffprobe(&media.file_path) {
+    let media_info = match ffprobe::ffprobe(&media.file_path.path) {
         // all good
         Ok(info) => info,
         // something broke
@@ -230,21 +231,21 @@ pub fn caption(
     let caption_extension: &OsStr = OsStr::new(pre_extension);
 
     // create a temp file to store the output.
-    let (_caption_dir, temp_caption_filename) = new_temp_media(caption_extension);
+    let temp_caption_location = new_temp_media(caption_extension);
 
     // save the image there
-    caption_image.save(&temp_caption_filename).unwrap();
+    caption_image.save(&temp_caption_location.path).unwrap();
 
     // create a temp file to store the output from _ffmpeg_
-    let ffmpeg_extension = media.file_path.extension().unwrap();
-    let (dir, ffmpeg_filename) = new_temp_media(ffmpeg_extension);
+    let ffmpeg_extension = media.file_path.path.extension().unwrap();
+    let temp_ffmpeg_location = new_temp_media(ffmpeg_extension);
 
     // now stack the image with ffmpeg
 
     // put the two paths into a vec, we need to reverse them if this is a bottom caption
     let mut inputs: Vec<&str> = vec![
-        temp_caption_filename.as_path().to_str().unwrap(),
-        media.file_path.as_path().to_str().unwrap(),
+        temp_caption_location.path.as_path().to_str().unwrap(),
+        media.file_path.path.as_path().to_str().unwrap(),
     ];
 
     // is this a bottom caption?
@@ -264,7 +265,7 @@ pub fn caption(
         ])
         .codec_audio("copy") // copy audio codec
         //.output(tempfile_path.to_str().unwrap()) // where is it going?
-        .output(ffmpeg_filename.to_str().unwrap())
+        .output(temp_ffmpeg_location.path.to_str().unwrap())
         .spawn()
         .unwrap(); // run that sucker
 
@@ -274,10 +275,10 @@ pub fn caption(
     Ok(Media {
         media_type: media.media_type,
         file_path: media.file_path,
-        output_tempfile: Some((dir, ffmpeg_filename)),
+        output_tempfile: Some(temp_ffmpeg_location) //Some((dir, ffmpeg_filename)),
     })
 }
-
+// #TODO: move testing to reduce duplication
 #[test]
 fn caption_test() {
     ffmpeg_sidecar::download::auto_download().unwrap();
@@ -286,22 +287,22 @@ fn caption_test() {
 
     // caption some stuff!
     let baja_cat = Media {
-        file_path: format!("{}/src/test_files/bajacat.png", src_path).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", src_path).into() },
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", src_path).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", src_path).into() },
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: format!("{}/src/test_files/factorio-test.gif", src_path).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", src_path).into() },
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: format!("{}/src/test_files/text-video-test.mp4", src_path).into(),
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", src_path).into() },
         media_type: MediaType::Video,
         output_tempfile: None,
     };
@@ -310,7 +311,7 @@ fn caption_test() {
     let test_files = [baja_cat, jazz, factorio_gif, video_test];
     for i in test_files {
         let m_type = i.media_type;
-        println!("Running {}", i.file_path.display());
+        println!("Running {}", i.file_path.path.display());
         let caption_result = caption(
             "This is a test caption.".to_string(),
             i,
@@ -322,7 +323,7 @@ fn caption_test() {
             Ok(okay) => {
                 println!(
                     "Got output file at {}",
-                    okay.output_tempfile.unwrap().1.display()
+                    okay.output_tempfile.unwrap().path.display()
                 );
             }
             Err(e) => {
