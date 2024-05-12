@@ -77,6 +77,8 @@ impl MediaType {
 pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, crate::Error> {
     // This function takes in a media file, and resizes it to be of certain dimensions.
 
+    // TODO: fix transparency on gifs (currently adds a white background)
+
     // Set boundaries for how small and big media can become
     const MIN_SIZE: u16 = 1;
     const MAX_SIZE: u16 = 8000;
