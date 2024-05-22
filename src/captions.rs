@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 use crate::{
     ffmpeg_babysitter::ffbabysit,
-    media_helpers::{new_temp_media, Media, MediaType, TempFileHolder},
+    media_helpers::{get_pixel_size, new_temp_media, Media, MediaType, TempFileHolder},
 };
 
 pub fn caption_media(
@@ -37,22 +37,7 @@ pub fn caption_media(
 
     // now get the size of the media
 
-    // ask ffprobe
-
-    let media_info = match ffprobe::ffprobe(&media.file_path.path) {
-        // all good
-        Ok(info) => info,
-        // something broke
-        Err(err) => {
-            println!("ffprobe failed!");
-            return Err(format!("{:#?}", err).to_string().into());
-        }
-    };
-
-    let media_x_res = media_info.streams[0]
-        .coded_width
-        .expect("File had no width?");
-    // let y_res = media_info.streams[0].coded_height.expect("File had no height?");
+    let (media_x_res, _): (i64, i64) = get_pixel_size(&media)?;
 
     // now process our text to wrap it into lines.
 
@@ -67,7 +52,7 @@ pub fn caption_media(
     let top_bottom_padding = media_x_res / 30;
 
     // how much width can we use?
-    let workable_width = media_x_res - (left_right_padding * 2) as i64;
+    let workable_width = media_x_res - (left_right_padding * 2);
 
     // how many characters wide are we going to make our text?
     // this math was made up on the spot.
@@ -316,7 +301,7 @@ fn caption_test() {
     for i in test_files {
         let m_type = i.media_type;
         println!("Running {}", i.file_path.path.display());
-        let caption_result = caption(
+        let caption_result = caption_media(
             "This is a test caption.".to_string(),
             i,
             false,
