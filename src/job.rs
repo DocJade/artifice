@@ -44,5 +44,6 @@ pub struct JobPart {
 pub enum JobType {
     Resize { width: u16, height: u16 },
     Caption { text: String },
+    Rotate { rotation: crate::media_helpers::Rotation}
     // #TODO
 }

@@ -18,8 +18,50 @@ pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
         ping(),
         resize(),
         caption(),
+        rotate()
     ]
 }
+
+//  Video, Gif, Image
+/// Rotate media.
+#[poise::command(slash_command, prefix_command)]
+pub async fn rotate(
+    ctx: Context<'_>,
+    #[description = "What angle?"] choice: crate::media_helpers::Rotation,
+) -> Result {
+    // rotation time!
+    let job = Job::new_simple(
+        JobType::Rotate {
+            rotation: choice
+        },
+        JobId(ctx.id()),
+    );
+    let media = find_media(ctx).await?.ok_or("No media found")?;
+    let handle = ctx.data().queue_block(ctx, job.id).await?;
+    let _permit = ctx.data().job_semaphore.acquire().await?;
+    handle
+        .edit(ctx, CreateReply::default().content("Processing..."))
+        .await?;
+    // </boilerplate>
+    let output_media = crate::media_helpers::rotate_and_flip(media, choice).await?;
+    handle
+        .edit(ctx, CreateReply::default().content("Uploading..."))
+        .await?;
+
+    handle
+        .edit(
+            ctx,
+            CreateReply::default().content("Done!").attachment(
+                poise::serenity_prelude::CreateAttachment::path(
+                    output_media.output_tempfile.unwrap().path,
+                )
+                .await?,
+            ),
+        )
+        .await?;
+    Ok(())
+}
+
 
 /// Resize media.
 #[poise::command(slash_command, prefix_command)]

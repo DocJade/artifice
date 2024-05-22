@@ -308,6 +308,76 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
     Ok(Some(Media { media_type, file_path: TempFileHolder { dir: tempdir, path: file_path.into() }, output_tempfile: None }))
 }
 
+// rotate media
+#[derive(Debug, poise::ChoiceParameter, PartialEq, Eq, Clone, Copy)]
+pub enum Rotation {
+    #[name = "90"]
+    CW = 1,
+    #[name = "90ccw"]
+    CCW = 0,
+    #[name = "180"]
+    Half = 2,
+    #[name = "vflip"]
+    FlipV = 3,
+    #[name = "hflip"]
+    FlipH = 4,
+}
+
+impl Rotation {
+    pub fn to_command(&self) -> &str {
+        match self {
+            Rotation::CW => "transpose=1",
+            Rotation::CCW => "transpose=0",
+            Rotation::Half => "hflip, vflip",
+            Rotation::FlipV => "vflip",
+            Rotation::FlipH => "hflip",
+        }
+    }
+}
+
+pub async fn rotate_and_flip(input: Media, rotation: Rotation) -> Result<Media, crate::Error> {
+
+    // let's rotate some stuff!
+    if input.media_type == MediaType::Audio {
+        // Cant resize audio.
+        return Err("Cannot rotate a audio file.".into());
+    }
+
+    // good to go!
+    
+    // get the extension of the input file
+    let extension = input.file_path.path.extension().unwrap();
+    
+    // create a tempfile to store the output.
+    let dir = new_temp_media(extension);
+    
+    // now rotate the media using filters!
+    let output = FfmpegCommand::new()
+        .hwaccel(std::env::var("HW_ACCEL").unwrap_or("none".to_string()))
+        .input(input.file_path.path.as_path().to_str().unwrap()) // input file
+        .args([
+            // set the dimensions
+            "-vf",
+            rotation.to_command(),
+        ])
+        .codec_audio("copy") // copy audio codec
+        .output(dir.path.to_str().unwrap())
+        .spawn()
+        .unwrap(); // run that sucker
+
+    // wait for that to finish
+    ffbabysit(output)?;
+
+    Ok(Media {
+        media_type: input.media_type,
+        file_path: input.file_path,
+        output_tempfile: Some(TempFileHolder{
+            dir: dir.dir, // durrrrr
+            path: dir.path,
+        }),
+    })
+}
+
 #[test]
 fn resize_test() {
     ffmpeg_sidecar::download::auto_download().unwrap();
