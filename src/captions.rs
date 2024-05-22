@@ -259,7 +259,7 @@ pub fn caption_media(
     }
 
     let output = FfmpegCommand::new()
-        .hwaccel("auto")
+        .hwaccel(std::env::var("HW_ACCEL").unwrap_or("none".to_string()))
         .input(inputs[0])
         .input(inputs[1])
         .args([
