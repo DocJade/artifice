@@ -91,20 +91,20 @@ pub fn resize_media(input: Media, mut x_size: u16, mut y_size: u16) -> Result<Me
         x_size += 1;
     }
 
-    // if the y size is 0, we will automatically rescale using the x size and aspect ratio.
+    // if the x size is 0, we will automatically rescale using the y size and aspect ratio.
 
-    if y_size == 0 {
+    if x_size == 0 {
         // need to calculate new size.
         // get the size of input media
         let (x_media_size, y_media_size): (i64, i64) = get_pixel_size(&input)?;
         let aspect_ratio: f32 = x_media_size as f32 / y_media_size as f32;
 
         // now multiply and round to get our new y size
-        y_size = (aspect_ratio * x_size as f32).round() as u16;
+        x_size = (aspect_ratio * y_size as f32).round() as u16;
         // make sure that sucker is even
-        if (y_size % 2) == 1 {
+        if (x_size % 2) == 1 {
             //odd! add one.
-            y_size += 1;
+            x_size += 1;
         }
     };
 
