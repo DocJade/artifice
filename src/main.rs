@@ -1,7 +1,7 @@
 mod commands;
 mod job;
 
-use poise::serenity_prelude as serenity;
+use poise::{serenity_prelude as serenity, CreateReply};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -51,6 +51,56 @@ impl Data {
             }
         }
         Ok(None)
+    }
+
+    /// blocks till `job` is at the front of the queue;
+    /// posts a message and edits it with the queue position.
+    /// returns the `ReplyHandle` i was repeatedly editing
+    pub async fn queue_block<'ctx>(
+        &self,
+        ctx: crate::Context<'ctx>,
+        job: JobId,
+    ) -> crate::Result<poise::ReplyHandle<'ctx>> {
+        self.queue_push(job).await?;
+        let mut timer = tokio::time::interval(std::time::Duration::from_secs(1));
+        let handle = ctx
+            .reply(Self::format_queue_position(
+                self.job_queue.read().await.len(),
+            ))
+            .await?;
+        loop {
+            let position = self.get_position(job).await?;
+            if let Some(position) = position {
+                handle
+                    .edit(
+                        ctx,
+                        CreateReply::new().content(Self::format_queue_position(position)),
+                    )
+                    .await?;
+                timer.tick().await;
+                if position == 0 {
+                    break;
+                }
+            } else {
+                return Err("Job removed from queue unexpectedly!".into());
+            }
+        }
+        if let Some(popped) = self.queue_pop().await? {
+            if popped == job {
+                Ok(handle)
+            } else {
+                Err(
+                    "Was at the front of the queue just a second ago, but wrong job was popped!"
+                        .into(),
+                )
+            }
+        } else {
+            Err("Was at the front of the queue just a second ago, but queue is now empty!".into())
+        }
+    }
+
+    pub fn format_queue_position(position: usize) -> String {
+        format!("Queue Position: {}", position)
     }
 }
 
