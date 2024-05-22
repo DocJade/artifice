@@ -21,6 +21,7 @@ pub struct Data {
 // import the commands
 
 mod captions;
+mod captions_rewrite;
 mod ffmpeg_babysitter;
 mod media_helpers; // for linting reasons // ditto
 
