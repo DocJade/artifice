@@ -107,7 +107,7 @@ pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, cra
     // every arg gets a separate line for readability instead of an array.
 
     let output = FfmpegCommand::new()
-        .hwaccel("auto")
+        .hwaccel(std::env::var("HW_ACCEL").unwrap_or("none".to_string()))
         .input(input.file_path.path.as_path().to_str().unwrap()) // input file
         .args([
             // set the dimensions
