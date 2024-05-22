@@ -74,10 +74,39 @@ impl MediaType {
     }
 }
 
-pub fn resize_media(input: Media, x_size: u16, y_size: u16) -> Result<Media, crate::Error> {
+pub fn resize_media(input: Media, mut x_size: u16, mut y_size: u16) -> Result<Media, crate::Error> {
     // This function takes in a media file, and resizes it to be of certain dimensions.
 
     // TODO: fix transparency on gifs (currently adds a white background)
+
+    // h264 gets very angry if the sizes are not divisible by 2, therefore we must check
+
+    // make sure that sucker is even
+    if (x_size % 2) == 1 {
+        //odd! add one.
+        x_size += 1;
+    }
+    if y_size != 0 && (y_size % 2) == 1 {
+        //odd! add one.
+        x_size += 1;
+    }
+
+    // if the y size is 0, we will automatically rescale using the x size and aspect ratio.
+
+    if y_size == 0 {
+        // need to calculate new size.
+        // get the size of input media
+        let (x_media_size, y_media_size): (i64, i64) = get_pixel_size(&input)?;
+        let aspect_ratio: f32 = x_media_size as f32 / y_media_size as f32;
+
+        // now multiply and round to get our new y size
+        y_size = (aspect_ratio * x_size as f32).round() as u16;
+        // make sure that sucker is even
+        if (y_size % 2) == 1 {
+            //odd! add one.
+            y_size += 1;
+        }
+    };
 
     // Set boundaries for how small and big media can become
     const MIN_SIZE: u16 = 1;
@@ -165,6 +194,29 @@ pub fn new_temp_media(extension: &OsStr) -> TempFileHolder {
 // just a shortcut.
 pub fn new_temp_dir() -> TempDir {
     return tempfile::tempdir().unwrap();
+}
+
+/// get the screen size of a media file
+/// returns (x,y)
+pub fn get_pixel_size(input: &Media) -> Result<(i64, i64), crate::Error> {
+    // ask ffprobe
+    let media_info = match ffprobe::ffprobe(&input.file_path.path) {
+        // all good
+        Ok(info) => info,
+        // something broke
+        Err(err) => {
+            tracing::info!("ffprobe size failed!");
+            return Err(format!("{:#?}", err).to_string().into());
+        }
+    };
+
+    // now pull out the x and y
+
+    let size_x: i64 = media_info.streams[0].width.expect("Media had unknown x size!");
+    let size_y: i64 = media_info.streams[0].height.expect("Media had unknown y size!");
+
+
+    Ok((size_x,size_y))
 }
 
 // looks for a media file in the chat history.
@@ -289,6 +341,56 @@ fn resize_test() {
         let m_type = i.media_type;
         println!("Running {}", i.file_path.path.display());
         let resize_result = resize_media(i, 128, 128);
+        match resize_result {
+            Ok(okay) => {
+                println!(
+                    "Got output file at {}",
+                    okay.output_tempfile.unwrap().path.display()
+                );
+            }
+            Err(e) => {
+                // only the audio file should panic
+                if m_type != MediaType::Audio {
+                    panic!("{e}")
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn auto_resize_test() {
+    ffmpeg_sidecar::download::auto_download().unwrap();
+    //get current path to src
+    let srcpath = env!("CARGO_MANIFEST_DIR");
+    // try resizing a few things
+    let baja_cat = Media {
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", srcpath).into() },
+        media_type: MediaType::Image,
+        output_tempfile: None,
+    };
+    // let jazz = Media {
+    //     file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into() },
+    //     media_type: MediaType::Audio,
+    //     output_tempfile: None,
+    // };
+    let factorio_gif = Media {
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", srcpath).into() },
+        media_type: MediaType::Gif,
+        output_tempfile: None,
+    };
+    let video_test = Media {
+        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into() },
+        media_type: MediaType::Video,
+        output_tempfile: None,
+    };
+
+    // loop over the test files.
+    let testfiles = [baja_cat, /*jazz,*/ factorio_gif, video_test];
+    for i in testfiles {
+        let m_type = i.media_type;
+        println!("Running {}", i.file_path.path.display());
+        let resize_result = resize_media(i, 167, 0);
         match resize_result {
             Ok(okay) => {
                 println!(
