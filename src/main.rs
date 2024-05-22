@@ -74,7 +74,7 @@ impl Data {
                 handle
                     .edit(
                         ctx,
-                        CreateReply::new().content(Self::format_queue_position(position)),
+                        CreateReply::default().content(Self::format_queue_position(position)),
                     )
                     .await?;
                 timer.tick().await;

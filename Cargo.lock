@@ -1587,7 +1587,7 @@ dependencies = [
 [[package]]
 name = "poise"
 version = "0.6.1"
-source = "git+https://github.com/serenity-rs/poise.git?branch=next#a9aa856797e1d3bb00a9935c669a5b0a0d349463"
+source = "git+https://github.com/DocJade/poise.git?branch=attachment-fix#f35f77e323cf22c8df7ee045aaec4f0ec7d0578a"
 dependencies = [
  "async-trait",
  "derivative",
@@ -1604,7 +1604,7 @@ dependencies = [
 [[package]]
 name = "poise_macros"
 version = "0.6.1"
-source = "git+https://github.com/serenity-rs/poise.git?branch=next#a9aa856797e1d3bb00a9935c669a5b0a0d349463"
+source = "git+https://github.com/DocJade/poise.git?branch=attachment-fix#f35f77e323cf22c8df7ee045aaec4f0ec7d0578a"
 dependencies = [
  "darling",
  "proc-macro2",
