@@ -21,9 +21,10 @@ pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
     ]
 }
 
+/// This command resizes media! Just provide a Height (and optional width).
 #[poise::command(slash_command, prefix_command)]
-pub async fn resize(ctx: Context<'_>, width: u16, height: u16) -> Result {
-    let job = Job::new_simple(JobType::Resize { width, height }, JobId(ctx.id()));
+pub async fn resize(ctx: Context<'_>, height: u16, width: Option<u16>) -> Result {
+    let job = Job::new_simple(JobType::Resize { width: width.unwrap_or(0), height }, JobId(ctx.id()));
     let media = find_media(ctx).await?.ok_or("No media found")?;
     let handle = ctx.data().queue_block(ctx, job.id).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
@@ -31,7 +32,7 @@ pub async fn resize(ctx: Context<'_>, width: u16, height: u16) -> Result {
         .edit(ctx, CreateReply::new().content("Processing..."))
         .await?;
     // </boilerplate>
-    let output_media = resize_media(media, width, height)?;
+    let output_media = resize_media(media, width.unwrap_or(0), height)?;
     handle
         .edit(ctx, CreateReply::new().content("Uploading..."))
         .await?;
