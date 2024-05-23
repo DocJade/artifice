@@ -7,6 +7,7 @@ use crate::captions::caption_media;
 use crate::commands::ping::ping;
 use crate::job::{Job, JobId, JobType};
 use crate::media_helpers;
+use crate::media_helpers::download_media;
 use crate::media_helpers::find_media;
 use crate::media_helpers::Media;
 use crate::{Context, Result};
@@ -30,12 +31,20 @@ async fn register(ctx: crate::Context<'_>) -> crate::Result {
 }
 
 pub async fn handle_job(ctx: Context<'_>, job: Job) -> crate::Result {
-    let media = find_media(ctx).await?.ok_or("No media found")?;
     let mut response = ctx
-        .reply(format!("Queue Position: {}", ctx.data().queue.len().await))
+        .reply("Searching for media...".to_string())
+        .await?;
+    let find_media = find_media(ctx).await?.ok_or("No media found")?;
+    response
+        .edit(ctx, CreateReply::default().content(format!("Queue Position: {}", ctx.data().queue.len().await)))
         .await?;
     ctx.data().queue.wait(job.id, ctx, &mut response).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
+    // download the media file
+    response
+        .edit(ctx, CreateReply::default().content("Downloading..."))
+        .await?;
+    let media = download_media(find_media).await?.expect("Unable to download media!");
     response
         .edit(ctx, CreateReply::default().content("Processing..."))
         .await?;
