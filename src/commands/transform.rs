@@ -18,8 +18,14 @@ pub async fn rotate(
 #[poise::command(slash_command, prefix_command)]
 pub async fn resize(
     ctx: Context<'_>,
-    #[description = "How tall?"] height: u16,
-    #[description = "How wide?"] width: Option<u16>,
+    #[description = "How tall?"]
+    #[min = 10]
+    #[max = 8000]
+    height: u16,
+    #[description = "How wide?"]
+    #[min = 10]
+    #[max = 8000]
+    width: Option<u16>,
 ) -> Result {
     handle_job(
         ctx,
