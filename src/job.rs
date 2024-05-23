@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-use std::sync::Arc;
-
 #[derive(Clone, Copy, Debug, bevy_derive::Deref, PartialEq, Eq)]
 pub struct JobId(pub u64);
 

@@ -6,11 +6,10 @@ use ab_glyph::*;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use glyph_brush_layout::{FontId, GlyphPositioner, SectionGeometry};
 use image::{imageops, DynamicImage, ImageBuffer, Rgba};
-use tempfile::TempDir;
 
 use crate::{
     ffmpeg_babysitter::ffbabysit,
-    media_helpers::{get_pixel_size, new_temp_media, Media, MediaType, TempFileHolder},
+    media_helpers::{get_pixel_size, new_temp_media, Media, MediaType},
 };
 
 pub fn caption_media(
@@ -36,7 +35,7 @@ pub fn caption_media(
     }
 
     // get the size of the main image, so we can determine how wide our caption needs to be
-    let (media_x_res, media_y_res): (i64, i64) = get_pixel_size(&media)?;
+    let (media_x_res, _media_y_res): (i64, i64) = get_pixel_size(&media)?;
 
     // load in the font
     // TODO: multiple font selection
@@ -48,7 +47,7 @@ pub fn caption_media(
 
     // calculate the font size.
     // font size is based on either the width of the image.
-    let mut font_size: f32 = (media_x_res as f32 / 12.0).floor();
+    let font_size: f32 = (media_x_res as f32 / 12.0).floor();
     tracing::info!("Font size is {},", font_size);
 
     // make a text section
@@ -226,6 +225,8 @@ pub fn caption_media(
 // #TODO: move testing to reduce duplication
 #[test]
 fn caption_test() {
+    use crate::media_helpers::TempFileHolder;
+    use tempfile::TempDir;
     ffmpeg_sidecar::download::auto_download().unwrap();
     //get current path to src
     let src_path = env!("CARGO_MANIFEST_DIR");

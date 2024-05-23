@@ -2,7 +2,7 @@
 
 extern crate reqwest;
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::Write;
 use std::{ffi::OsStr, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
@@ -69,12 +69,12 @@ impl MediaType {
                     Some(MediaType::Image)
                 }
             }
-            other => None,
+            _ => None,
         };
     }
 }
 
-pub fn resize_media(input: Media, mut x_size: u16, mut y_size: u16) -> Result<Media, crate::Error> {
+pub fn resize_media(input: Media, mut x_size: u16, y_size: u16) -> Result<Media, crate::Error> {
     // This function takes in a media file, and resizes it to be of certain dimensions.
 
     // TODO: fix transparency on gifs (currently adds a white background)
@@ -193,7 +193,7 @@ pub fn new_temp_media(extension: &OsStr) -> TempFileHolder {
 // create a temporary folder by itself.
 // just a shortcut.
 pub fn new_temp_dir() -> TempDir {
-    return tempfile::tempdir().unwrap();
+    tempfile::tempdir().unwrap()
 }
 
 /// get the screen size of a media file
@@ -391,7 +391,7 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<UrlAndMediaTyp
 
         // didnt find anything, try again.
         // update the search start point
-        search_params = MessagePagination::Before(messages.last().unwrap().id.into());
+        search_params = MessagePagination::Before(messages.last().unwrap().id);
         // count the loop
         number_checked += PAGE_SIZE as u32
     }
@@ -450,7 +450,7 @@ pub async fn download_media(file: UrlAndMediaType) -> crate::Result<Option<Media
         media_type: file.media_type,
         file_path: TempFileHolder {
             dir: tempdir,
-            path: file_path.into(),
+            path: file_path,
         },
         output_tempfile: None,
     })) // ok cool we got a media, time to download it
@@ -460,9 +460,9 @@ pub async fn download_media(file: UrlAndMediaType) -> crate::Result<Option<Media
 #[derive(Debug, poise::ChoiceParameter, PartialEq, Eq, Clone, Copy)]
 pub enum Rotation {
     #[name = "90"]
-    CW = 1,
+    Cw = 1,
     #[name = "90ccw"]
-    CCW = 0,
+    Ccw = 0,
     #[name = "180"]
     Half = 2,
     #[name = "vflip"]
@@ -472,10 +472,10 @@ pub enum Rotation {
 }
 
 impl Rotation {
-    pub fn to_command(&self) -> &str {
+    pub fn to_command(self) -> &'static str {
         match self {
-            Rotation::CW => "transpose=1",
-            Rotation::CCW => "transpose=0",
+            Rotation::Cw => "transpose=1",
+            Rotation::Ccw => "transpose=0",
             Rotation::Half => "hflip, vflip",
             Rotation::FlipV => "vflip",
             Rotation::FlipH => "hflip",

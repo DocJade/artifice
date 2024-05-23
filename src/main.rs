@@ -5,7 +5,7 @@ mod queue;
 use poise::serenity_prelude as serenity;
 use std::collections::HashSet;
 
-use job::JobId;
+pub use job::*;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Result<T = ()> = std::result::Result<T, Error>;

@@ -1,6 +1,6 @@
 mod ping;
+mod transform;
 
-use poise::serenity_prelude as serenity;
 use poise::CreateReply;
 
 use crate::captions::caption_media;
@@ -18,9 +18,9 @@ pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
         // todo
         ping(),
         register(),
-        resize(),
         caption(),
-        rotate(),
+        transform::resize(),
+        transform::rotate(),
     ]
 }
 
@@ -77,40 +77,6 @@ pub async fn handle_job(ctx: Context<'_>, job: Job) -> crate::Result {
         .await?;
 
     Ok(())
-}
-
-//  Video, Gif, Image
-/// Rotate media.
-#[poise::command(slash_command, prefix_command)]
-pub async fn rotate(
-    ctx: Context<'_>,
-    #[description = "What angle?"] choice: crate::media_helpers::Rotation,
-) -> Result {
-    handle_job(
-        ctx,
-        Job::new_simple(JobType::Rotate { rotation: choice }, JobId(ctx.id())),
-    )
-    .await
-}
-
-/// Resize media.
-#[poise::command(slash_command, prefix_command)]
-pub async fn resize(
-    ctx: Context<'_>,
-    #[description = "How tall?"] height: u16,
-    #[description = "How wide?"] width: Option<u16>,
-) -> Result {
-    handle_job(
-        ctx,
-        Job::new_simple(
-            JobType::Resize {
-                width: width.unwrap_or(0),
-                height,
-            },
-            JobId(ctx.id()),
-        ),
-    )
-    .await
 }
 
 /// Add a caption to media.
