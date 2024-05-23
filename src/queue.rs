@@ -7,17 +7,9 @@ use poise::{CreateReply, ReplyHandle};
 
 type JobHandle = crate::JobId;
 
+#[derive(Default)]
 pub struct JobQueue {
     queue: std::sync::Arc<tokio::sync::RwLock<VecDeque<JobHandle>>>,
-}
-
-impl Default for JobQueue {
-    fn default() -> Self {
-        use tokio::sync::Semaphore;
-        Self {
-            queue: Default::default(),
-        }
-    }
 }
 
 impl JobQueue {
