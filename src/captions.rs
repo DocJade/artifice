@@ -3,8 +3,9 @@
 use std::ffi::OsStr;
 
 use ffmpeg_sidecar::command::FfmpegCommand;
+use glyph_brush_layout::{FontId, GlyphPositioner, SectionGeometry};
 use image::{imageops, DynamicImage, ImageBuffer, Rgba};
-use rusttype::{point, Font, PositionedGlyph, Scale};
+use ab_glyph::*;
 use tempfile::TempDir;
 
 use crate::{
@@ -13,7 +14,7 @@ use crate::{
 };
 
 pub fn caption_media(
-    text: String,
+    input_text: String,
     media: Media,
     bottom: bool,
     text_color: (u8, u8, u8),
@@ -21,226 +22,135 @@ pub fn caption_media(
 ) -> Result<Media, crate::Error> {
     // creates and adds a caption to every item in the media.
 
-    // TODO: make a test that tries a bunch of sizes of media to make sure
-    // none of them crash (generating images from scratch is possible with ffmpeg)
+    // are we trying to caption audio?
 
     if media.media_type == MediaType::Audio {
         // we cant caption audio.
         return Err("Cannot caption a audio file.".into());
     }
 
-    // make sure the text isnt stupidly long
+    // make sure the text super long
     const MAX_LEN: usize = 500;
-    if text.len() > MAX_LEN {
+    if input_text.len() > MAX_LEN {
         return Err(format!("Caption cannot be longer than {} characters.", MAX_LEN).into());
     }
 
-    // Load the font.
-
-    //TODO: this font is hardcoded, font selection in the future?
-    let font_data = include_bytes!("../fonts/open-sans/OpenSans-Bold.ttf");
-    // open the font
-    let font = Font::try_from_bytes(font_data as &[u8]).expect("Could not load font.");
-    
-    
-    // now get the size of the media
-    
+    // get the size of the main image, so we can determine how wide our caption needs to be
     let (media_x_res, media_y_res): (i64, i64) = get_pixel_size(&media)?;
-    
+
+
+    // load in the font
+    // TODO: multiple font selection
+    let font_open_sans_bold = FontRef::try_from_slice(include_bytes!("../fonts/open-sans/OpenSans-Bold.ttf"))?;
+    let fonts = &[font_open_sans_bold];
+
+    // now we will layout the text
+
+    // calculate the font size.
     // font size is based on either the width of the image.
     let mut font_size: f32 = (media_x_res as f32 / 12.0).floor();
     tracing::info!("Font size is {},", font_size);
-    
-    // now, thats the font size in PIXELS, not points. so we must convert
-    // font_size = font.scale_for_pixel_height(font_size);
-    tracing::info!("...which is {} pixels tall.", font_size);
-    // if this is less than like, 8px, we have a problem
-    assert!(font_size > 8.0, "Font is way too small!");    
 
+    // make a text section
+    let text_section = glyph_brush_layout::SectionText{
+        text: &input_text,
+        scale: PxScale::from(font_size),
+        font_id: FontId(0), // first font in the font array
+    };
+
+    // since the caption is going to be in the middle, we need to know where that is
+    let width_center = (media_x_res as f32 / 2.0).ceil();
+
+    // now calculate padding
     // padding is based on font size.
     let vertical_padding: i64 = (font_size * 0.5) as i64;
     // and horiz is based on vert.
     let horizontal_padding: i64 = (vertical_padding as f32 / 2.0) as i64; // is this a pointless cast? idk lmao
 
-    // how much width can we use?
-    let workable_width = media_x_res - (horizontal_padding * 2);
+    // use that to calculate caption image size, by subbing from main image size.
+    let caption_geometry_width: f32 = media_x_res as f32 - (horizontal_padding as f32 * 2.0);
 
-    // how many characters wide are we going to make our text?
-    // this math was made up on the spot.
+    // set the caption size
+    // caption can be as tall as it needs to be
+    let caption_geometry = SectionGeometry{
+        screen_position: (width_center, 0.0), // center, no padding on top yet TODO:
+        bounds: (caption_geometry_width, media_x_res as f32) // set the max width of the caption to be the same as the image width,
+                                                         // since we will be actually calculating the size of the image later.
+    };                     
 
-    // assuming characters are never wider than 75% their height...
+    let glyphs_pre_cal = glyph_brush_layout::Layout::default_wrap()
+    .h_align(glyph_brush_layout::HorizontalAlign::Center); // in the middle please.
 
-    let workable_character_width: i64 = (workable_width as f32 / (font_size * 0.75) ) as i64;
+    // now get the size of the layout
+    let layout_size: Rect = glyphs_pre_cal.bounds_rect(&caption_geometry);
 
-    // it might be possible for this to go negative with a big enough font size, who knows
-    assert!(workable_character_width > 0, "Workable width was negative!");
+    // and finish laying out
+    let final_layout = glyphs_pre_cal
+    .calculate_glyphs(
+        fonts,
+        &caption_geometry, 
+        &[text_section]
+    );
 
-    //TODO: smarter character math? or just test it with a bunch of images.
-    // make it also take into account the length of the strings? so single word captions arent too small.
-
-    // make sure we have a reasonable amount of room
-    if workable_character_width < 10 {
-        // less than 10 characters wide is wild. no thanks.
-        //TODO: In the future, this should rescale the image instead of failing, make it 2x wider or something
-        // TODO: It will recurse into self, so:
-        // run resize to resize image (2x? 4x?) then call itself again.
-
-        return Err("Not wide enough to caption.".into());
-    }
-    
-    tracing::info!("Wrapping text...");
-
-    let wrapped_text = textwrap::wrap(&text, workable_character_width as usize);
-
-    // now we need to make an image for each one of these rows...
-
-    // set up the font scale
-    // let scale: Scale = Scale::uniform(font_size as f32);
-    let scale: Scale = Scale { x: font_size, y: font_size };
-
-    // no idea what this does, guessing its height related.
-    let v_metrics = font.v_metrics(scale);
-
-    // now we will loop over every line of text and lay it out
-
-    // laid out glyphs
-    let mut layouts: Vec<Vec<PositionedGlyph>> = vec![];
-
-    for line in wrapped_text {
-        // idk how cows work rofl
-        let text: String = line.into_owned();
-
-        tracing::info!("Laying out line: {}", text);
-
-        // rustfont has a nice auto-layout thing, but its only for one line at a time
-        let laid: Vec<PositionedGlyph> = font
-            .layout(&text, scale, point(0.0, 0.0 + v_metrics.ascent))
-            .collect();
-
-        // done.
-        layouts.push(laid);
-    }
-
-    // now we need to know how big each of those layouts is
-    // width, height
-    let mut layout_sizes: Vec<(u32, u32)> = vec![];
-
-    for layout in &layouts {
-        // borrowed with love from
-        // https://gitlab.redox-os.org/redox-os/rusttype/-/blob/master/dev/examples/image.rs
-        let glyphs_height = (v_metrics.ascent - v_metrics.descent).ceil() as u32;
-        let glyphs_width = {
-            let min_x = layout
-                .first()
-                .map(|g| g.pixel_bounding_box().unwrap().min.x)
-                .unwrap();
-            let max_x = layout
-                .last()
-                .map(|g| g.pixel_bounding_box().unwrap().max.x)
-                .unwrap();
-            (max_x - min_x) as u32
-        };
-        layout_sizes.push((glyphs_width, glyphs_height))
-    }
-
-    // okay now that we know the size of each layout, we can calculate where the center of each line is
-    // might have to come back here for vertical centering, we'll see.
-    let mut layout_centers: Vec<u32> = vec![];
-
-    for i in &layout_sizes {
-        layout_centers.push(i.0 / 2);
-    }
-
-    // now we need to make images for every row, yay.
-    tracing::info!("Making row images...");
-
-    let mut line_images: Vec<image::ImageBuffer<Rgba<u8>, Vec<u8>>> = vec![];
-    for i in 0..layouts.len() {
-        tracing::info!("New line...");
-        // now make an image of the correct size.
-        let layout = &layouts[i];
-        let (mut size_x, mut size_y) = layout_sizes[i];
-        // now, sometimes the text bleeds a bit into the edges, so we need to add
-        // some safety padding.
-        size_x += font_size as u32;
-        size_y += font_size as u32;
-
-        // create the image we are going to render into.
-        tracing::info!("Creating image of size {}, {}", size_x, size_y);
-        let mut image: image::ImageBuffer<Rgba<u8>, Vec<u8>> =
-            DynamicImage::new_rgba8(size_x, size_y).to_rgba8();
-
-        // stolem!
-        // Loop through the glyphs in the text, positing each one on a line
-        for glyph in layout {
-            if let Some(bounding_box) = glyph.pixel_bounding_box() {
-                // Draw the glyph into the image per-pixel by using the draw closure
-                glyph.draw(|x, y, v| {
-                    image.put_pixel(
-                        // Offset the position by the glyph bounding box
-                        x + bounding_box.min.x as u32,
-                        y + bounding_box.min.y as u32,
-                        // Turn the coverage into an alpha value
-                        Rgba([text_color.0, text_color.1, text_color.2, (v * 255.0) as u8]),
-                    )
-                });
+    // calculate the total height based off of the glyphs
+    let mut finding_height:f32 = 0.0;
+    for section in final_layout.clone() {
+        if let Some(outline) = fonts[section.font_id].outline_glyph(section.glyph){
+            let top = outline.px_bounds().max.y;
+            if top > finding_height {
+                finding_height = top;
             }
         }
-
-        // now the image should be rendered in. NEXT!
-        line_images.push(image);
     }
 
-    // now with all of the images, we need to stack them
+    assert!(layout_size.min.x >= 0.0, "erm, the min >=0 ! {}", layout_size.min.x);
+    let layout_size_height = finding_height.ceil() as u32;
 
-    // calculate the size for the new image
-
-    // get widest item in the list, add padding
-    // let main_w = layout_sizes.iter().map(|x| x.0).max().unwrap() + (SIDE_PADDING*2) as u32;\
-
-    // actually we dont care, just make it the width of the input
-    let main_w = media_x_res as u32;
-
-    // total height, add padding as well.
-    let main_h: u32 =
-        layout_sizes.iter().map(|y| y.1).sum::<u32>() + (vertical_padding * 2) as u32;
-
-    // make the background image with the chosen color
-    let white: image::Rgba<u8> = image::Rgba([bg_color.0, bg_color.1, bg_color.2, 255]);
-    let mut caption_image = ImageBuffer::from_pixel(main_w, main_h, white);
-
-    // now add the images. making sure to center them.
-
-    // get the center of the main image.
-    let big_middle = main_w / 2;
-
-    // current height offset
-    let mut height_in: u32 = vertical_padding as u32; // start with a little padding.
-    // let mut height_in: u32 = 0;
-
-    tracing::info!("Stacking images...");
-
-    for i in 0..line_images.len() {
-        // place the image
-        // get the centered alignment
-        // TODO: this can subtract with overflow.
-        let centered = big_middle - layout_centers[i];
-        imageops::overlay(
-            &mut caption_image,
-            &line_images[i],
-            centered.into(),
-            height_in.into(),
-        );
-        // now increment the height in by the height of the image
-        height_in += layout_sizes[i].1;
+    // now draw it onto a canvas!
+    tracing::info!("Creating image of size {}, {}", media_x_res, layout_size_height);
+    let mut caption_image: image::ImageBuffer<Rgba<u8>, Vec<u8>> = DynamicImage::new_rgba8(media_x_res.try_into().unwrap(), layout_size_height).to_rgba8();
+    
+    // render each letter / glyph
+    for section in final_layout {
+        // grab the font and compute the path (?)
+        if let Some(outline) = fonts[section.font_id].outline_glyph(section.glyph){
+            // let x_offset = section.glyph.position.x as u32;
+            // let y_offset = section.glyph.position.y as u32;
+            let bounding_box = outline.px_bounds();
+            
+            // now actually draw onto the image
+            outline.draw(|x, y, coverage| {
+                caption_image.put_pixel(
+                    // now we need to get the offsets into the image for where to draw this glyph
+                    // so we dont just draw on top of ourselves for every character
+                    x + bounding_box.min.x as u32,
+                    y + bounding_box.min.y as u32,
+                    // Turn the coverage into an alpha value
+                    Rgba([text_color.0, text_color.1, text_color.2, (coverage * 255.0) as u8]),
+                )
+            });
+        };
     }
 
-    // now we need to stack the image on top of the original source media
+    // Now that's just the text, throw that on top of a white background.
 
-    //ffmpeg time!
+    // need to add vert padding to vert size, and just set width to image input size
 
-    // first we need to save our caption somewhere so we can feed it to ffmpeg.
-    // caption
+    let bg_color: image::Rgba<u8> = image::Rgba([bg_color.0, bg_color.1, bg_color.2, 255]);
+    let mut final_image = ImageBuffer::from_pixel(
+        media_x_res as u32,
+        caption_image.height() + (vertical_padding * 2) as u32,
+        bg_color);
+
+    // find center, since we add padding.
+    let caption_image_horiz_center: i64 = ((final_image.width() / 2) - (caption_image.width() / 2)).into();
+    let caption_image_vert_center: i64 = ((final_image.height() / 2) - (caption_image.height() / 2)).into();
+
+    imageops::overlay(&mut final_image, &caption_image, caption_image_horiz_center, caption_image_vert_center);
+
+    
+    // now save that image to the disk, then we can stack it on top of our media.
+    
     let pre_extension: &str = "png";
     let caption_extension: &OsStr = OsStr::new(pre_extension);
 
@@ -248,7 +158,9 @@ pub fn caption_media(
     let temp_caption_location = new_temp_media(caption_extension);
 
     // save the image there
-    caption_image.save(&temp_caption_location.path).unwrap();
+    final_image.save(&temp_caption_location.path).unwrap();
+
+    // now stack it with ffmpeg
 
     // create a temp file to store the output from _ffmpeg_
     let ffmpeg_extension = media.file_path.path.extension().unwrap();

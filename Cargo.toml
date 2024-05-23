@@ -6,15 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ab_glyph = "0.2.26"
 bevy_derive = "0.13.2"
 dotenv = "0.15.0"
 ffmpeg-sidecar = "1.1.0"
 ffprobe = "0.4.0"
+glyph_brush_layout = "0.2.3"
 image = "0.25.1"
 poise = { git = "https://github.com/DocJade/poise.git", version = "0.6.1", branch = "attachment-fix" }
 rand = "0.8.5"
 reqwest = "0.12.4"
-rusttype = "0.9.3"
 smallvec = "1.13.2"
 tempfile = "3.10.1"
 textwrap = "0.16.1"
