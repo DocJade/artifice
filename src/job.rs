@@ -45,6 +45,7 @@ pub enum JobType {
     },
     Caption {
         text: String,
+        bottom: bool
     },
     Rotate {
         rotation: crate::media_helpers::Rotation,

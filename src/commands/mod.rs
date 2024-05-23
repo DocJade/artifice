@@ -57,7 +57,7 @@ pub async fn handle_job(ctx: Context<'_>, job: Job) -> crate::Result {
         .ok_or("not implemented")?
         .to_owned();
     let result: Media = match job {
-        JobType::Caption { text } => caption_media(text, media, false, (0, 0, 0), (255, 255, 255))?,
+        JobType::Caption { text, bottom } => caption_media(text, media, bottom, (0, 0, 0), (255, 255, 255))?,
         JobType::Resize { width, height } => media_helpers::resize_media(media, width, height)?,
         JobType::Rotate { rotation } => media_helpers::rotate_and_flip(media, rotation).await?,
     };
@@ -84,13 +84,14 @@ pub async fn handle_job(ctx: Context<'_>, job: Job) -> crate::Result {
 pub async fn caption(
     ctx: Context<'_>,
     #[description = "Text to add"] caption: String,
-    #[description = "Do you want the caption on the bottom?"] _bottom: Option<bool>,
+    #[description = "Do you want the caption on the bottom?"] bottom: Option<bool>,
 ) -> Result {
     handle_job(
         ctx,
         Job::new_simple(
             JobType::Caption {
                 text: caption.clone(),
+                bottom: bottom.unwrap_or(false)
             },
             JobId(ctx.id()),
         ),
