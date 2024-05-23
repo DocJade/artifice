@@ -40,11 +40,14 @@ pub async fn handle_job(ctx: Context<'_>, job: Job) -> crate::Result {
         .await?;
     ctx.data().queue.wait(job.id, ctx, &mut response).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
+    // download the media file
+    response
+        .edit(ctx, CreateReply::default().content("Downloading..."))
+        .await?;
+    let media = download_media(find_media).await?.expect("Unable to download media!");
     response
         .edit(ctx, CreateReply::default().content("Processing..."))
         .await?;
-    // download the media file
-    let media = download_media(find_media).await?.expect("Unable to download media!");
     let job = job
         .parts
         .first()
