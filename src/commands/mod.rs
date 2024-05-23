@@ -19,6 +19,7 @@ pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
         ping(),
         register(),
         caption(),
+        bottom_caption(),
         transform::resize(),
         transform::rotate(),
     ]
@@ -92,6 +93,28 @@ pub async fn caption(
             JobType::Caption {
                 text: caption.clone(),
                 bottom: bottom.unwrap_or(false)
+            },
+            JobId(ctx.id()),
+        ),
+    )
+    .await
+}
+
+/// Add a bottom caption to media.
+#[poise::command(
+    slash_command,
+    rename = "bottomcaption" // renaming here so clippy doesn't get mad.
+)]
+pub async fn bottom_caption(
+    ctx: Context<'_>,
+    #[description = "Text to add"] caption: String
+) -> Result {
+    handle_job(
+        ctx,
+        Job::new_simple(
+            JobType::Caption {
+                text: caption.clone(),
+                bottom: true
             },
             JobId(ctx.id()),
         ),
