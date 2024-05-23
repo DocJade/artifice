@@ -2,13 +2,14 @@
 
 extern crate reqwest;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::{ffi::OsStr, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
 
 use poise::serenity_prelude::{MessageId, MessagePagination};
 use rand::Rng;
+use regex::Regex;
 use tempfile::TempDir;
 use tracing::info;
 
@@ -33,7 +34,7 @@ pub struct Media {
 #[derive(Debug)]
 pub struct TempFileHolder {
     pub dir: TempDir,
-    pub path: PathBuf
+    pub path: PathBuf,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -42,7 +43,7 @@ pub enum MediaType {
     Gif,
     Image,
     Audio,
-    Unknown
+    Unknown,
 }
 
 impl MediaType {
@@ -51,7 +52,7 @@ impl MediaType {
         // did we get anything?
         if thingie.is_empty() {
             // no stuffs
-            return None
+            return None;
         }
 
         // what kinda mf file is this
@@ -67,10 +68,9 @@ impl MediaType {
                     // erm no
                     Some(MediaType::Image)
                 }
-            },
-            other => None
+            }
+            other => None,
         };
-        
     }
 }
 
@@ -157,7 +157,7 @@ pub fn resize_media(input: Media, mut x_size: u16, mut y_size: u16) -> Result<Me
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: Some(TempFileHolder{
+        output_tempfile: Some(TempFileHolder {
             dir: dir.dir, // durrrrr
             path: dir.path,
         }),
@@ -186,7 +186,7 @@ pub fn new_temp_media(extension: &OsStr) -> TempFileHolder {
     // Done!
     TempFileHolder {
         dir,
-        path: file_path
+        path: file_path,
     }
 }
 
@@ -212,15 +212,32 @@ pub fn get_pixel_size(input: &Media) -> Result<(i64, i64), crate::Error> {
 
     // now pull out the x and y
 
-    let size_x: i64 = media_info.streams[0].width.expect("Media had unknown x size!");
-    let size_y: i64 = media_info.streams[0].height.expect("Media had unknown y size!");
+    let size_x: i64 = media_info.streams[0]
+        .width
+        .expect("Media had unknown x size!");
+    let size_y: i64 = media_info.streams[0]
+        .height
+        .expect("Media had unknown y size!");
 
-
-    Ok((size_x,size_y))
+    Ok((size_x, size_y))
 }
 
-// looks for a media file in the chat history.
-pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
+pub struct UrlAndMediaType {
+    url: String,
+    media_type: MediaType,
+}
+
+impl UrlAndMediaType {
+    pub fn default() -> Self {
+        UrlAndMediaType {
+            url: String::new(),
+            media_type: MediaType::Unknown,
+        }
+    }
+}
+
+// looks for a media file in the chat history. (does not download it)
+pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<UrlAndMediaType>> {
     // TODO: gifs from tenor.
     info!("Looking for media...");
     // now we shall take that mf context and look for some media
@@ -229,83 +246,214 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
     // get the message id that this context came from
     let start: MessageId = ctx.id().into();
 
-    let search_params: MessagePagination = MessagePagination::Before(start);
-    // get the last 50 messages
-    let messages: Vec<Message> = http.get_messages(channel_id, Some(search_params), Some(50)).await?; // TODO: is this too many messages????!?!??!
-    info!("Got 50 messages...");
+    // we are going to loop over messages until we find media, with a limit of messages checked.
 
-    let mut url: String = String::new();
-    let mut media_type: MediaType = MediaType::Unknown;
+    const PAGE_SIZE: u8 = 5;
+    const READ_LIMIT: u32 = 50;
+    let mut number_checked: u32 = 0;
+    let mut search_params: MessagePagination = MessagePagination::Before(start);
+    let mut messages: Vec<Message>;
+    let mut found_url: UrlAndMediaType = UrlAndMediaType::default();
 
-    // do these messages have media tho
-    for msg in messages {
-        if msg.attachments.len() == 1 {
-            info!("Found a message with media!");
-            // wowie boys we got medias
-            let find_type = msg.attachments.first().unwrap().content_type.as_ref().unwrap().clone();
-            info!("{find_type}");
-
-            // is this a thing we can actually use
-            let maybe_media_type = MediaType::from(find_type);
-            // can we use it?
-            if maybe_media_type.is_none() {
-                // nuh uh
-                info!("...but it was something we couldn't use.");
-                continue;
-            }
-            info!("Good media file!");
-            // cool we can use it!
-            media_type = maybe_media_type.unwrap();
-            url = msg.attachments.first().unwrap().url.clone();
-            break
+    loop {
+        if number_checked >= READ_LIMIT {
+            break;
         }
+        // grab some messages
+        info!("Looking for media, Pulling {} messages...", PAGE_SIZE);
+        messages = http
+            .get_messages(channel_id, Some(search_params), Some(PAGE_SIZE))
+            .await?;
+
+        for message in &messages {
+            // here's our list of checks:
+            // Attachments
+            // Embeds
+
+            // Does this message have any attachments?
+
+            // we only care if the message has a SINGLE attachment.
+            if message.attachments.len() == 1 {
+                info!("Found an attachment...");
+                // wowie boys we got medias
+                let find_type = message
+                    .attachments
+                    .first()
+                    .unwrap()
+                    .content_type
+                    .as_ref()
+                    .unwrap()
+                    .clone();
+
+                // is this a thing we can actually use
+                let maybe_media_type = MediaType::from(find_type);
+                // can we use it?
+                if maybe_media_type.is_none() {
+                    // nuh uh
+                    info!("...but it was something we couldn't use.");
+                    continue;
+                }
+                info!("Good media file!");
+                // cool we can use it!
+                found_url = UrlAndMediaType {
+                    url: message.attachments.first().unwrap().url.clone(),
+                    media_type: maybe_media_type.unwrap(),
+                };
+                break;
+            }
+
+            // does this message have any embeds?
+            if !message.embeds.is_empty() {
+                info!("Found embeds...");
+                // embeds present!
+
+                // anything we can use?
+                for embed in message.embeds.clone() {
+                    if let Some(n) = embed.kind {
+                        match n.as_str() {
+                            "image" => {
+                                info!("Found an embedded image!");
+                                found_url = UrlAndMediaType {
+                                    url: embed.url.unwrap(),
+                                    media_type: MediaType::Image,
+                                }
+                            }
+                            "video" => {
+                                info!("Found an embedded video!");
+                                found_url = UrlAndMediaType {
+                                    url: embed.url.unwrap(),
+                                    media_type: MediaType::Video,
+                                }
+                            }
+                            "gifv" => {
+                                info!("Found an embedded gifv...");
+                                // tenor gif...
+                                // "download" the gif (really its the html of the page)
+
+                                let mut tenor_string: String = String::new();
+                                info!("Attempting to extract link...");
+                                let mut request = reqwest::get(embed.url.unwrap()).await?;
+                                loop {
+                                    let check = request.chunk().await?;
+                                    if check.is_none() {
+                                        info!("Unable to find link.");
+                                        info!("\n\n\n\n{}\n\n\n\n", tenor_string);
+                                        // we've failed to find the link, give up.
+                                        break;
+                                    }
+                                    tenor_string += &String::from_utf8_lossy(&check.unwrap())
+                                        .replace("\\u002F", "/"); // probably a bad idea lmao
+                                                                  // is the part we're looking for in here?
+                                                                  // first check to make sure we have that entire section
+                                    let finder = Regex::new(
+                                        r#"<meta itemProp="contentUrl" content="(?<url>[^"]+)">"#,
+                                    )
+                                    .unwrap();
+
+                                    // look
+                                    let looking_glass = finder.captures(&tenor_string);
+
+                                    if looking_glass.is_some() {
+                                        // gotcha!
+                                        info!("Found it!");
+                                        // pull out the url
+                                        found_url = UrlAndMediaType {
+                                            url: looking_glass
+                                                .unwrap()
+                                                .name("url")
+                                                .unwrap()
+                                                .as_str()
+                                                .to_string(),
+                                            media_type: MediaType::Gif,
+                                        };
+                                        break;
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                // if we've found something, stop here.
+                if found_url.media_type != MediaType::Unknown {
+                    // got something!
+                    break;
+                }
+            }
+        }
+
+        // if we've found something, stop here.
+        if found_url.media_type != MediaType::Unknown {
+            // got something!
+            break;
+        }
+
+        // didnt find anything, try again.
+        // update the search start point
+        search_params = MessagePagination::Before(messages.last().unwrap().id.into());
+        // count the loop
+        number_checked += PAGE_SIZE as u32
     }
-    info!("Finished looping over messages...");
 
     // got anything?
-    if url.is_empty() || media_type == MediaType::Unknown {
+    if found_url.media_type == MediaType::Unknown {
         // no :(
-            info!("didn't find anything.");
-        return Ok(None)
+        return Ok(None);
     }
 
-    // ok cool we got a media, time to download it
+    // found something!
 
+    // return the url to the file
+    Ok(Some(found_url))
+}
+
+// download a media file!
+pub async fn download_media(file: UrlAndMediaType) -> crate::Result<Option<Media>> {
     // first, get a folder to store it
     let tempdir = new_temp_dir();
 
     // now actually download the file
     info!("Downloading a media file...");
-    let resp = reqwest::get(url.clone()).await?;
+    info!("From: {}", file.url);
+    let resp = reqwest::get(file.url.clone()).await?;
 
     // split out the filename
     // TODO: cleanup?
-    let filename = url
-    .split('/')
-    .last()
-    .unwrap()
-    .split('?')
-    .next()
-    .unwrap();
+    let filename = file
+        .url
+        .split('/')
+        .last()
+        .unwrap()
+        .split('?')
+        .next()
+        .unwrap();
 
     // Create the target file path within the folder
     let file_path = tempdir.path().join(filename);
-    info!("{}",file_path.to_str().unwrap());
-    
+    info!("{}", file_path.to_str().unwrap());
+
     // Get the response body as bytes
     let data = resp.bytes().await?;
-    
+
     // Open the target file for writing
     let mut out = File::create(file_path.clone())?;
-    
+
     // Copy downloaded data to the file
     out.write_all(&data)?;
-    
+
     // in theory we have the file now.
     info!("Finished downloading {}", filename);
 
     // return that sucker!
-    Ok(Some(Media { media_type, file_path: TempFileHolder { dir: tempdir, path: file_path.into() }, output_tempfile: None }))
+    Ok(Some(Media {
+        media_type: file.media_type,
+        file_path: TempFileHolder {
+            dir: tempdir,
+            path: file_path.into(),
+        },
+        output_tempfile: None,
+    })) // ok cool we got a media, time to download it
 }
 
 // rotate media
@@ -336,7 +484,6 @@ impl Rotation {
 }
 
 pub async fn rotate_and_flip(input: Media, rotation: Rotation) -> Result<Media, crate::Error> {
-
     // let's rotate some stuff!
     if input.media_type == MediaType::Audio {
         // Cant resize audio.
@@ -344,13 +491,13 @@ pub async fn rotate_and_flip(input: Media, rotation: Rotation) -> Result<Media, 
     }
 
     // good to go!
-    
+
     // get the extension of the input file
     let extension = input.file_path.path.extension().unwrap();
-    
+
     // create a tempfile to store the output.
     let dir = new_temp_media(extension);
-    
+
     // now rotate the media using filters!
     let output = FfmpegCommand::new()
         .hwaccel(std::env::var("HW_ACCEL").unwrap_or("none".to_string()))
@@ -371,7 +518,7 @@ pub async fn rotate_and_flip(input: Media, rotation: Rotation) -> Result<Media, 
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: Some(TempFileHolder{
+        output_tempfile: Some(TempFileHolder {
             dir: dir.dir, // durrrrr
             path: dir.path,
         }),
@@ -385,22 +532,34 @@ fn resize_test() {
     let srcpath = env!("CARGO_MANIFEST_DIR");
     // try resizing a few things
     let baja_cat = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/bajacat.png", srcpath).into(),
+        },
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into(),
+        },
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/factorio-test.gif", srcpath).into(),
+        },
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into(),
+        },
         media_type: MediaType::Video,
         output_tempfile: None,
     };
@@ -435,7 +594,10 @@ fn auto_resize_test() {
     let srcpath = env!("CARGO_MANIFEST_DIR");
     // try resizing a few things
     let baja_cat = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/bajacat.png", srcpath).into(),
+        },
         media_type: MediaType::Image,
         output_tempfile: None,
     };
@@ -445,12 +607,18 @@ fn auto_resize_test() {
     //     output_tempfile: None,
     // };
     let factorio_gif = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/factorio-test.gif", srcpath).into(),
+        },
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into(),
+        },
         media_type: MediaType::Video,
         output_tempfile: None,
     };

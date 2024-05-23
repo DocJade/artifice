@@ -42,8 +42,14 @@ pub struct JobPart {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JobType {
-    Resize { width: u16, height: u16 },
-    Caption { text: String },
-    Rotate { rotation: crate::media_helpers::Rotation}
-    // #TODO
+    Resize {
+        width: u16,
+        height: u16,
+    },
+    Caption {
+        text: String,
+    },
+    Rotate {
+        rotation: crate::media_helpers::Rotation,
+    }, // #TODO
 }

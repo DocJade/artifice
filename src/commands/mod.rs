@@ -8,7 +8,7 @@ use poise::{CreateReply, ReplyHandle};
 use crate::captions::caption_media;
 use crate::commands::ping::ping;
 use crate::job::{Job, JobId, JobPart, JobType};
-use crate::media_helpers::{find_media, resize_media};
+use crate::media_helpers::{download_media, find_media, resize_media};
 use crate::{Context, Result};
 
 // return the commands in this folder.
@@ -18,7 +18,7 @@ pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
         ping(),
         resize(),
         caption(),
-        rotate()
+        rotate(),
     ]
 }
 
@@ -30,19 +30,18 @@ pub async fn rotate(
     #[description = "What angle?"] choice: crate::media_helpers::Rotation,
 ) -> Result {
     // rotation time!
-    let job = Job::new_simple(
-        JobType::Rotate {
-            rotation: choice
-        },
-        JobId(ctx.id()),
-    );
-    let media = find_media(ctx).await?.ok_or("No media found")?;
+    let job = Job::new_simple(JobType::Rotate { rotation: choice }, JobId(ctx.id()));
+    let find_media = find_media(ctx).await?.ok_or("No media found")?;
     let handle = ctx.data().queue_block(ctx, job.id).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
     handle
         .edit(ctx, CreateReply::default().content("Processing..."))
         .await?;
     // </boilerplate>
+    // download the file
+    let media = download_media(find_media)
+        .await?
+        .expect("Unable to download media!");
     let output_media = crate::media_helpers::rotate_and_flip(media, choice).await?;
     handle
         .edit(ctx, CreateReply::default().content("Uploading..."))
@@ -62,7 +61,6 @@ pub async fn rotate(
     Ok(())
 }
 
-
 /// Resize media.
 #[poise::command(slash_command, prefix_command)]
 pub async fn resize(
@@ -77,13 +75,17 @@ pub async fn resize(
         },
         JobId(ctx.id()),
     );
-    let media = find_media(ctx).await?.ok_or("No media found")?;
+    let find_media = find_media(ctx).await?.ok_or("No media found")?;
     let handle = ctx.data().queue_block(ctx, job.id).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
     handle
         .edit(ctx, CreateReply::default().content("Processing..."))
         .await?;
     // </boilerplate>
+    // download the file
+    let media = download_media(find_media)
+        .await?
+        .expect("Unable to download media!");
     let output_media = resize_media(media, width.unwrap_or(0), height)?;
     handle
         .edit(ctx, CreateReply::default().content("Uploading..."))
@@ -116,13 +118,19 @@ pub async fn caption(
         },
         JobId(ctx.id()),
     );
-    let media = find_media(ctx).await?.ok_or("No media found")?;
+    let find_media = find_media(ctx).await?.ok_or("No media found")?;
     let handle = ctx.data().queue_block(ctx, job.id).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
     handle
         .edit(ctx, CreateReply::default().content("Processing..."))
         .await?;
     // </boilerplate>
+
+    // download the file
+    let media = download_media(find_media)
+        .await?
+        .expect("Unable to download media!");
+
     let output_media = caption_media(
         caption,
         media,
