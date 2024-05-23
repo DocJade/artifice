@@ -319,7 +319,20 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<UrlAndMediaTyp
                                 }
                             }
                             "video" => {
-                                info!("Found an embedded video!");
+                                info!("Found an embedded video...");
+                                
+                                // make sure this is a direct link to media, and not just some random
+                                // website page (ie YouTube)
+                                
+                                let context_length = reqwest::get(embed.url.clone().unwrap()).await?.content_length();
+                                
+                                if context_length.is_none() {
+                                    // this isn't a direct file.
+                                    info!("...But it wasn't a file url.");
+                                    continue;
+                                }
+                                info!("...Looks like a proper file!");
+
                                 found_url = UrlAndMediaType {
                                     url: embed.url.unwrap(),
                                     media_type: MediaType::Video,
