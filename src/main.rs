@@ -1,5 +1,3 @@
-#![feature(async_drop)]
-
 mod commands;
 mod job;
 mod queue;
