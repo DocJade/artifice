@@ -2,7 +2,7 @@
 
 extern crate reqwest;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::{ffi::OsStr, path::PathBuf};
 
 use ffmpeg_sidecar::command::FfmpegCommand;
@@ -33,7 +33,7 @@ pub struct Media {
 #[derive(Debug)]
 pub struct TempFileHolder {
     pub dir: TempDir,
-    pub path: PathBuf
+    pub path: PathBuf,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -42,7 +42,7 @@ pub enum MediaType {
     Gif,
     Image,
     Audio,
-    Unknown
+    Unknown,
 }
 
 impl MediaType {
@@ -51,7 +51,7 @@ impl MediaType {
         // did we get anything?
         if thingie.is_empty() {
             // no stuffs
-            return None
+            return None;
         }
 
         // what kinda mf file is this
@@ -67,14 +67,13 @@ impl MediaType {
                     // erm no
                     Some(MediaType::Image)
                 }
-            },
-            other => None
+            }
+            _ => None,
         };
-        
     }
 }
 
-pub fn resize_media(input: Media, mut x_size: u16, mut y_size: u16) -> Result<Media, crate::Error> {
+pub fn resize_media(input: Media, mut x_size: u16, y_size: u16) -> Result<Media, crate::Error> {
     // This function takes in a media file, and resizes it to be of certain dimensions.
 
     // TODO: fix transparency on gifs (currently adds a white background)
@@ -157,7 +156,7 @@ pub fn resize_media(input: Media, mut x_size: u16, mut y_size: u16) -> Result<Me
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: Some(TempFileHolder{
+        output_tempfile: Some(TempFileHolder {
             dir: dir.dir, // durrrrr
             path: dir.path,
         }),
@@ -186,14 +185,14 @@ pub fn new_temp_media(extension: &OsStr) -> TempFileHolder {
     // Done!
     TempFileHolder {
         dir,
-        path: file_path
+        path: file_path,
     }
 }
 
 // create a temporary folder by itself.
 // just a shortcut.
 pub fn new_temp_dir() -> TempDir {
-    return tempfile::tempdir().unwrap();
+    tempfile::tempdir().unwrap()
 }
 
 /// get the screen size of a media file
@@ -212,11 +211,14 @@ pub fn get_pixel_size(input: &Media) -> Result<(i64, i64), crate::Error> {
 
     // now pull out the x and y
 
-    let size_x: i64 = media_info.streams[0].width.expect("Media had unknown x size!");
-    let size_y: i64 = media_info.streams[0].height.expect("Media had unknown y size!");
+    let size_x: i64 = media_info.streams[0]
+        .width
+        .expect("Media had unknown x size!");
+    let size_y: i64 = media_info.streams[0]
+        .height
+        .expect("Media had unknown y size!");
 
-
-    Ok((size_x,size_y))
+    Ok((size_x, size_y))
 }
 
 // looks for a media file in the chat history.
@@ -231,7 +233,9 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
 
     let search_params: MessagePagination = MessagePagination::Before(start);
     // get the last 50 messages
-    let messages: Vec<Message> = http.get_messages(channel_id, Some(search_params), Some(50)).await?; // TODO: is this too many messages????!?!??!
+    let messages: Vec<Message> = http
+        .get_messages(channel_id, Some(search_params), Some(50))
+        .await?; // TODO: is this too many messages????!?!??!
     info!("Got 50 messages...");
 
     let mut url: String = String::new();
@@ -242,7 +246,14 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
         if msg.attachments.len() == 1 {
             info!("Found a message with media!");
             // wowie boys we got medias
-            let find_type = msg.attachments.first().unwrap().content_type.as_ref().unwrap().clone();
+            let find_type = msg
+                .attachments
+                .first()
+                .unwrap()
+                .content_type
+                .as_ref()
+                .unwrap()
+                .clone();
             info!("{find_type}");
 
             // is this a thing we can actually use
@@ -256,8 +267,8 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
             info!("Good media file!");
             // cool we can use it!
             media_type = maybe_media_type.unwrap();
-            url = msg.attachments.first().unwrap().url.clone();
-            break
+            url.clone_from(&msg.attachments.first().unwrap().url);
+            break;
         }
     }
     info!("Finished looping over messages...");
@@ -265,8 +276,8 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
     // got anything?
     if url.is_empty() || media_type == MediaType::Unknown {
         // no :(
-            info!("didn't find anything.");
-        return Ok(None)
+        info!("didn't find anything.");
+        return Ok(None);
     }
 
     // ok cool we got a media, time to download it
@@ -280,41 +291,42 @@ pub async fn find_media(ctx: Context<'_>) -> crate::Result<Option<Media>> {
 
     // split out the filename
     // TODO: cleanup?
-    let filename = url
-    .split('/')
-    .last()
-    .unwrap()
-    .split('?')
-    .next()
-    .unwrap();
+    let filename = url.split('/').last().unwrap().split('?').next().unwrap();
 
     // Create the target file path within the folder
     let file_path = tempdir.path().join(filename);
-    info!("{}",file_path.to_str().unwrap());
-    
+    info!("{}", file_path.to_str().unwrap());
+
     // Get the response body as bytes
     let data = resp.bytes().await?;
-    
+
     // Open the target file for writing
     let mut out = File::create(file_path.clone())?;
-    
+
     // Copy downloaded data to the file
     out.write_all(&data)?;
-    
+
     // in theory we have the file now.
     info!("Finished downloading {}", filename);
 
     // return that sucker!
-    Ok(Some(Media { media_type, file_path: TempFileHolder { dir: tempdir, path: file_path.into() }, output_tempfile: None }))
+    Ok(Some(Media {
+        media_type,
+        file_path: TempFileHolder {
+            dir: tempdir,
+            path: file_path,
+        },
+        output_tempfile: None,
+    }))
 }
 
 // rotate media
 #[derive(Debug, poise::ChoiceParameter, PartialEq, Eq, Clone, Copy)]
 pub enum Rotation {
     #[name = "90"]
-    CW = 1,
+    Cw = 1,
     #[name = "90ccw"]
-    CCW = 0,
+    Ccw = 0,
     #[name = "180"]
     Half = 2,
     #[name = "vflip"]
@@ -324,10 +336,10 @@ pub enum Rotation {
 }
 
 impl Rotation {
-    pub fn to_command(&self) -> &str {
+    pub fn to_command(self) -> &'static str {
         match self {
-            Rotation::CW => "transpose=1",
-            Rotation::CCW => "transpose=0",
+            Rotation::Cw => "transpose=1",
+            Rotation::Ccw => "transpose=0",
             Rotation::Half => "hflip, vflip",
             Rotation::FlipV => "vflip",
             Rotation::FlipH => "hflip",
@@ -336,7 +348,6 @@ impl Rotation {
 }
 
 pub async fn rotate_and_flip(input: Media, rotation: Rotation) -> Result<Media, crate::Error> {
-
     // let's rotate some stuff!
     if input.media_type == MediaType::Audio {
         // Cant resize audio.
@@ -344,13 +355,13 @@ pub async fn rotate_and_flip(input: Media, rotation: Rotation) -> Result<Media, 
     }
 
     // good to go!
-    
+
     // get the extension of the input file
     let extension = input.file_path.path.extension().unwrap();
-    
+
     // create a tempfile to store the output.
     let dir = new_temp_media(extension);
-    
+
     // now rotate the media using filters!
     let output = FfmpegCommand::new()
         .hwaccel(std::env::var("HW_ACCEL").unwrap_or("none".to_string()))
@@ -371,7 +382,7 @@ pub async fn rotate_and_flip(input: Media, rotation: Rotation) -> Result<Media, 
     Ok(Media {
         media_type: input.media_type,
         file_path: input.file_path,
-        output_tempfile: Some(TempFileHolder{
+        output_tempfile: Some(TempFileHolder {
             dir: dir.dir, // durrrrr
             path: dir.path,
         }),
@@ -385,22 +396,34 @@ fn resize_test() {
     let srcpath = env!("CARGO_MANIFEST_DIR");
     // try resizing a few things
     let baja_cat = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/bajacat.png", srcpath).into(),
+        },
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", srcpath).into(),
+        },
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/factorio-test.gif", srcpath).into(),
+        },
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into(),
+        },
         media_type: MediaType::Video,
         output_tempfile: None,
     };
@@ -435,7 +458,10 @@ fn auto_resize_test() {
     let srcpath = env!("CARGO_MANIFEST_DIR");
     // try resizing a few things
     let baja_cat = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/bajacat.png", srcpath).into(),
+        },
         media_type: MediaType::Image,
         output_tempfile: None,
     };
@@ -445,12 +471,18 @@ fn auto_resize_test() {
     //     output_tempfile: None,
     // };
     let factorio_gif = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/factorio-test.gif", srcpath).into(),
+        },
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/text-video-test.mp4", srcpath).into(),
+        },
         media_type: MediaType::Video,
         output_tempfile: None,
     };

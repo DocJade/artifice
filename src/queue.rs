@@ -23,7 +23,7 @@ impl JobQueue {
         self.queue.write().await.push_back(job);
         let _guard = QueueGuard {
             queue: Arc::downgrade(&self.queue),
-            job: job,
+            job,
         };
         loop {
             if let Some(position) = self.poll(job).await {

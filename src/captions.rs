@@ -2,15 +2,14 @@
 
 use std::ffi::OsStr;
 
+use ab_glyph::*;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use glyph_brush_layout::{FontId, GlyphPositioner, SectionGeometry};
 use image::{imageops, DynamicImage, ImageBuffer, Rgba};
-use ab_glyph::*;
-use tempfile::TempDir;
 
 use crate::{
     ffmpeg_babysitter::ffbabysit,
-    media_helpers::{get_pixel_size, new_temp_media, Media, MediaType, TempFileHolder},
+    media_helpers::{get_pixel_size, new_temp_media, Media, MediaType},
 };
 
 pub fn caption_media(
@@ -36,23 +35,23 @@ pub fn caption_media(
     }
 
     // get the size of the main image, so we can determine how wide our caption needs to be
-    let (media_x_res, media_y_res): (i64, i64) = get_pixel_size(&media)?;
-
+    let (media_x_res, _media_y_res): (i64, i64) = get_pixel_size(&media)?;
 
     // load in the font
     // TODO: multiple font selection
-    let font_open_sans_bold = FontRef::try_from_slice(include_bytes!("../fonts/open-sans/OpenSans-Bold.ttf"))?;
+    let font_open_sans_bold =
+        FontRef::try_from_slice(include_bytes!("../fonts/open-sans/OpenSans-Bold.ttf"))?;
     let fonts = &[font_open_sans_bold];
 
     // now we will layout the text
 
     // calculate the font size.
     // font size is based on either the width of the image.
-    let mut font_size: f32 = (media_x_res as f32 / 12.0).floor();
+    let font_size: f32 = (media_x_res as f32 / 12.0).floor();
     tracing::info!("Font size is {},", font_size);
 
     // make a text section
-    let text_section = glyph_brush_layout::SectionText{
+    let text_section = glyph_brush_layout::SectionText {
         text: &input_text,
         scale: PxScale::from(font_size),
         font_id: FontId(0), // first font in the font array
@@ -72,30 +71,25 @@ pub fn caption_media(
 
     // set the caption size
     // caption can be as tall as it needs to be
-    let caption_geometry = SectionGeometry{
+    let caption_geometry = SectionGeometry {
         screen_position: (width_center, 0.0), // center, no padding on top yet TODO:
-        bounds: (caption_geometry_width, media_x_res as f32) // set the max width of the caption to be the same as the image width,
-                                                         // since we will be actually calculating the size of the image later.
-    };                     
+        bounds: (caption_geometry_width, media_x_res as f32), // set the max width of the caption to be the same as the image width,
+                                                              // since we will be actually calculating the size of the image later.
+    };
 
     let glyphs_pre_cal = glyph_brush_layout::Layout::default_wrap()
-    .h_align(glyph_brush_layout::HorizontalAlign::Center); // in the middle please.
+        .h_align(glyph_brush_layout::HorizontalAlign::Center); // in the middle please.
 
     // now get the size of the layout
     let layout_size: Rect = glyphs_pre_cal.bounds_rect(&caption_geometry);
 
     // and finish laying out
-    let final_layout = glyphs_pre_cal
-    .calculate_glyphs(
-        fonts,
-        &caption_geometry, 
-        &[text_section]
-    );
+    let final_layout = glyphs_pre_cal.calculate_glyphs(fonts, &caption_geometry, &[text_section]);
 
     // calculate the total height based off of the glyphs
-    let mut finding_height:f32 = 0.0;
+    let mut finding_height: f32 = 0.0;
     for section in final_layout.clone() {
-        if let Some(outline) = fonts[section.font_id].outline_glyph(section.glyph){
+        if let Some(outline) = fonts[section.font_id].outline_glyph(section.glyph) {
             let top = outline.px_bounds().max.y;
             if top > finding_height {
                 finding_height = top;
@@ -103,21 +97,30 @@ pub fn caption_media(
         }
     }
 
-    assert!(layout_size.min.x >= 0.0, "erm, the min >=0 ! {}", layout_size.min.x);
+    assert!(
+        layout_size.min.x >= 0.0,
+        "erm, the min >=0 ! {}",
+        layout_size.min.x
+    );
     let layout_size_height = finding_height.ceil() as u32;
 
     // now draw it onto a canvas!
-    tracing::info!("Creating image of size {}, {}", media_x_res, layout_size_height);
-    let mut caption_image: image::ImageBuffer<Rgba<u8>, Vec<u8>> = DynamicImage::new_rgba8(media_x_res.try_into().unwrap(), layout_size_height).to_rgba8();
-    
+    tracing::info!(
+        "Creating image of size {}, {}",
+        media_x_res,
+        layout_size_height
+    );
+    let mut caption_image: image::ImageBuffer<Rgba<u8>, Vec<u8>> =
+        DynamicImage::new_rgba8(media_x_res.try_into().unwrap(), layout_size_height).to_rgba8();
+
     // render each letter / glyph
     for section in final_layout {
         // grab the font and compute the path (?)
-        if let Some(outline) = fonts[section.font_id].outline_glyph(section.glyph){
+        if let Some(outline) = fonts[section.font_id].outline_glyph(section.glyph) {
             // let x_offset = section.glyph.position.x as u32;
             // let y_offset = section.glyph.position.y as u32;
             let bounding_box = outline.px_bounds();
-            
+
             // now actually draw onto the image
             outline.draw(|x, y, coverage| {
                 caption_image.put_pixel(
@@ -126,7 +129,12 @@ pub fn caption_media(
                     x + bounding_box.min.x as u32,
                     y + bounding_box.min.y as u32,
                     // Turn the coverage into an alpha value
-                    Rgba([text_color.0, text_color.1, text_color.2, (coverage * 255.0) as u8]),
+                    Rgba([
+                        text_color.0,
+                        text_color.1,
+                        text_color.2,
+                        (coverage * 255.0) as u8,
+                    ]),
                 )
             });
         };
@@ -140,17 +148,24 @@ pub fn caption_media(
     let mut final_image = ImageBuffer::from_pixel(
         media_x_res as u32,
         caption_image.height() + (vertical_padding * 2) as u32,
-        bg_color);
+        bg_color,
+    );
 
     // find center, since we add padding.
-    let caption_image_horiz_center: i64 = ((final_image.width() / 2) - (caption_image.width() / 2)).into();
-    let caption_image_vert_center: i64 = ((final_image.height() / 2) - (caption_image.height() / 2)).into();
+    let caption_image_horiz_center: i64 =
+        ((final_image.width() / 2) - (caption_image.width() / 2)).into();
+    let caption_image_vert_center: i64 =
+        ((final_image.height() / 2) - (caption_image.height() / 2)).into();
 
-    imageops::overlay(&mut final_image, &caption_image, caption_image_horiz_center, caption_image_vert_center);
+    imageops::overlay(
+        &mut final_image,
+        &caption_image,
+        caption_image_horiz_center,
+        caption_image_vert_center,
+    );
 
-    
     // now save that image to the disk, then we can stack it on top of our media.
-    
+
     let pre_extension: &str = "png";
     let caption_extension: &OsStr = OsStr::new(pre_extension);
 
@@ -204,34 +219,48 @@ pub fn caption_media(
     Ok(Media {
         media_type: media.media_type,
         file_path: media.file_path,
-        output_tempfile: Some(temp_ffmpeg_location) //Some((dir, ffmpeg_filename)),
+        output_tempfile: Some(temp_ffmpeg_location), //Some((dir, ffmpeg_filename)),
     })
 }
 // #TODO: move testing to reduce duplication
 #[test]
 fn caption_test() {
+    use crate::media_helpers::TempFileHolder;
+    use tempfile::TempDir;
     ffmpeg_sidecar::download::auto_download().unwrap();
     //get current path to src
     let src_path = env!("CARGO_MANIFEST_DIR");
 
     // caption some stuff!
     let baja_cat = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/bajacat.png", src_path).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/bajacat.png", src_path).into(),
+        },
         media_type: MediaType::Image,
         output_tempfile: None,
     };
     let jazz = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", src_path).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/CC0-jazz-guitar.mp3", src_path).into(),
+        },
         media_type: MediaType::Audio,
         output_tempfile: None,
     };
     let factorio_gif = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/factorio-test.gif", src_path).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/factorio-test.gif", src_path).into(),
+        },
         media_type: MediaType::Gif,
         output_tempfile: None,
     };
     let video_test = Media {
-        file_path: TempFileHolder{ dir: TempDir::new().unwrap(), path: format!("{}/src/test_files/text-video-test.mp4", src_path).into() },
+        file_path: TempFileHolder {
+            dir: TempDir::new().unwrap(),
+            path: format!("{}/src/test_files/text-video-test.mp4", src_path).into(),
+        },
         media_type: MediaType::Video,
         output_tempfile: None,
     };
