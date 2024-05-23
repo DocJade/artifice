@@ -78,7 +78,7 @@ impl Drop for QueueGuard {
             let job = self.job;
             tokio::spawn(async move {
                 let mut lock = queue.write().await;
-                lock.retain(|other| *other == job);
+                lock.retain(|other| *other != job);
             });
         }
     }
