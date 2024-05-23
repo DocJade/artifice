@@ -1,14 +1,14 @@
 mod ping;
-use std::sync::Arc;
-use std::time::Duration;
 
-use poise::serenity_prelude::{Builder, EditInteractionResponse};
-use poise::{CreateReply, ReplyHandle};
+use poise::serenity_prelude as serenity;
+use poise::CreateReply;
 
 use crate::captions::caption_media;
 use crate::commands::ping::ping;
-use crate::job::{Job, JobId, JobPart, JobType};
-use crate::media_helpers::{find_media, resize_media};
+use crate::job::{Job, JobId, JobType};
+use crate::media_helpers;
+use crate::media_helpers::find_media;
+use crate::media_helpers::Media;
 use crate::{Context, Result};
 
 // return the commands in this folder.
@@ -16,10 +16,58 @@ pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
     vec![
         // todo
         ping(),
+        register(),
         resize(),
         caption(),
         rotate(),
     ]
+}
+
+#[poise::command(prefix_command, hide_in_help)]
+async fn register(ctx: crate::Context<'_>) -> crate::Result {
+    poise::builtins::register_application_commands_buttons(ctx).await?;
+    Ok(())
+}
+
+pub async fn handle_job(ctx: Context<'_>, job: Job) -> crate::Result {
+    let media = find_media(ctx).await?.ok_or("No media found")?;
+    let mut response = ctx
+        .reply(format!("Queue Position: {}", ctx.data().queue.len().await))
+        .await?;
+    ctx.data().queue.wait(job.id, ctx, &mut response).await?;
+    let _permit = ctx.data().job_semaphore.acquire().await?;
+    response
+        .edit(ctx, CreateReply::default().content("Processing..."))
+        .await?;
+    let job = job
+        .parts
+        .first()
+        .ok_or("not implemented")?
+        .subparts
+        .first()
+        .ok_or("not implemented")?
+        .to_owned();
+    let result: Media = match job {
+        JobType::Caption { text } => caption_media(text, media, false, (0, 0, 0), (255, 255, 255))?,
+        JobType::Resize { width, height } => media_helpers::resize_media(media, width, height)?,
+        JobType::Rotate { rotation } => media_helpers::rotate_and_flip(media, rotation).await?,
+    };
+    response
+        .edit(ctx, CreateReply::default().content("Uploading..."))
+        .await?;
+    response
+        .edit(
+            ctx,
+            CreateReply::default().content("Done!").attachment(
+                poise::serenity_prelude::CreateAttachment::path(
+                    result.output_tempfile.unwrap().path,
+                )
+                .await?,
+            ),
+        )
+        .await?;
+
+    Ok(())
 }
 
 //  Video, Gif, Image
@@ -29,32 +77,11 @@ pub async fn rotate(
     ctx: Context<'_>,
     #[description = "What angle?"] choice: crate::media_helpers::Rotation,
 ) -> Result {
-    // rotation time!
-    let job = Job::new_simple(JobType::Rotate { rotation: choice }, JobId(ctx.id()));
-    let media = find_media(ctx).await?.ok_or("No media found")?;
-    let handle = ctx.data().queue_block(ctx, job.id).await?;
-    let _permit = ctx.data().job_semaphore.acquire().await?;
-    handle
-        .edit(ctx, CreateReply::default().content("Processing..."))
-        .await?;
-    // </boilerplate>
-    let output_media = crate::media_helpers::rotate_and_flip(media, choice).await?;
-    handle
-        .edit(ctx, CreateReply::default().content("Uploading..."))
-        .await?;
-
-    handle
-        .edit(
-            ctx,
-            CreateReply::default().content("Done!").attachment(
-                poise::serenity_prelude::CreateAttachment::path(
-                    output_media.output_tempfile.unwrap().path,
-                )
-                .await?,
-            ),
-        )
-        .await?;
-    Ok(())
+    handle_job(
+        ctx,
+        Job::new_simple(JobType::Rotate { rotation: choice }, JobId(ctx.id())),
+    )
+    .await
 }
 
 /// Resize media.
@@ -64,37 +91,17 @@ pub async fn resize(
     #[description = "How tall?"] height: u16,
     #[description = "How wide?"] width: Option<u16>,
 ) -> Result {
-    let job = Job::new_simple(
-        JobType::Resize {
-            width: width.unwrap_or(0),
-            height,
-        },
-        JobId(ctx.id()),
-    );
-    let media = find_media(ctx).await?.ok_or("No media found")?;
-    let handle = ctx.data().queue_block(ctx, job.id).await?;
-    let _permit = ctx.data().job_semaphore.acquire().await?;
-    handle
-        .edit(ctx, CreateReply::default().content("Processing..."))
-        .await?;
-    // </boilerplate>
-    let output_media = resize_media(media, width.unwrap_or(0), height)?;
-    handle
-        .edit(ctx, CreateReply::default().content("Uploading..."))
-        .await?;
-
-    handle
-        .edit(
-            ctx,
-            CreateReply::default().content("Done!").attachment(
-                poise::serenity_prelude::CreateAttachment::path(
-                    output_media.output_tempfile.unwrap().path,
-                )
-                .await?,
-            ),
-        )
-        .await?;
-    Ok(())
+    handle_job(
+        ctx,
+        Job::new_simple(
+            JobType::Resize {
+                width: width.unwrap_or(0),
+                height,
+            },
+            JobId(ctx.id()),
+        ),
+    )
+    .await
 }
 
 /// Add a caption to media.
@@ -102,46 +109,16 @@ pub async fn resize(
 pub async fn caption(
     ctx: Context<'_>,
     #[description = "Text to add"] caption: String,
-    #[description = "Do you want the caption on the bottom?"] bottom: Option<bool>,
+    #[description = "Do you want the caption on the bottom?"] _bottom: Option<bool>,
 ) -> Result {
-    let job = Job::new_simple(
-        JobType::Caption {
-            text: caption.clone(),
-        },
-        JobId(ctx.id()),
-    );
-    let media = find_media(ctx).await?.ok_or("No media found")?;
-    let handle = ctx.data().queue_block(ctx, job.id).await?;
-    let _permit = ctx.data().job_semaphore.acquire().await?;
-    handle
-        .edit(ctx, CreateReply::default().content("Processing..."))
-        .await?;
-    // </boilerplate>
-    let output_media = caption_media(
-        caption,
-        media,
-        bottom.unwrap_or(false),
-        (0, 0, 0),
-        (255, 255, 255),
-    )?;
-
-    // tell the user we are uploading
-    handle
-        .edit(ctx, CreateReply::default().content("Uploading..."))
-        .await?;
-
-    // actually upload the file
-    handle
-        .edit(
-            ctx,
-            CreateReply::default().content("Done!").attachment(
-                poise::serenity_prelude::CreateAttachment::path(
-                    output_media.output_tempfile.unwrap().path,
-                )
-                .await?,
-            ),
-        )
-        .await?;
-
-    Ok(())
+    handle_job(
+        ctx,
+        Job::new_simple(
+            JobType::Caption {
+                text: caption.clone(),
+            },
+            JobId(ctx.id()),
+        ),
+    )
+    .await
 }

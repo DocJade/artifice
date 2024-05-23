@@ -19,13 +19,11 @@
       {
         devShells.default = mkShell rec {
           nativeBuildInputs = [
+            (rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
+            rust-analyzer
             pkg-config
           ];
           buildInputs = [
-            (rust-bin.stable.latest.default.override {
-              extensions = [ "rust-src" ]; # include rust stdlib source code; allows you to "go to definition" on library functions
-            })
-            rust-analyzer
             openssl
           ];
           LD_LIBRARY_PATH = lib.makeLibraryPath buildInputs;
