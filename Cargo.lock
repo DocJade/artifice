@@ -117,6 +117,7 @@ dependencies = [
  "image",
  "poise",
  "rand",
+ "regex",
  "reqwest 0.12.4",
  "smallvec",
  "tempfile",

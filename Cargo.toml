@@ -15,6 +15,7 @@ glyph_brush_layout = "0.2.3"
 image = "0.25.1"
 poise = { git = "https://github.com/DocJade/poise.git", version = "0.6.1", branch = "attachment-fix" }
 rand = "0.8.5"
+regex = "1.10.4"
 reqwest = "0.12.4"
 smallvec = "1.13.2"
 tempfile = "3.10.1"
