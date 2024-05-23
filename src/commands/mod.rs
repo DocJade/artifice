@@ -18,7 +18,7 @@ pub fn commands() -> Vec<poise::Command<crate::Data, crate::Error>> {
         ping(),
         resize(),
         caption(),
-        rotate()
+        rotate(),
     ]
 }
 
@@ -30,12 +30,7 @@ pub async fn rotate(
     #[description = "What angle?"] choice: crate::media_helpers::Rotation,
 ) -> Result {
     // rotation time!
-    let job = Job::new_simple(
-        JobType::Rotate {
-            rotation: choice
-        },
-        JobId(ctx.id()),
-    );
+    let job = Job::new_simple(JobType::Rotate { rotation: choice }, JobId(ctx.id()));
     let media = find_media(ctx).await?.ok_or("No media found")?;
     let handle = ctx.data().queue_block(ctx, job.id).await?;
     let _permit = ctx.data().job_semaphore.acquire().await?;
@@ -61,7 +56,6 @@ pub async fn rotate(
         .await?;
     Ok(())
 }
-
 
 /// Resize media.
 #[poise::command(slash_command, prefix_command)]

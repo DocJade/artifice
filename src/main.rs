@@ -1,7 +1,10 @@
 mod commands;
 mod job;
 
-use poise::{serenity_prelude as serenity, CreateReply};
+use poise::{
+    serenity_prelude::{self as serenity, futures::lock},
+    CreateReply,
+};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -34,23 +37,26 @@ impl Default for Data {
 }
 
 impl Data {
-    pub async fn queue_push(&self, job: JobId) -> crate::Result {
+    pub async fn queue_push(&self, job: JobId) {
         let mut lock = self.job_queue.write().await;
         lock.push_back(job);
-        Ok(())
     }
-    pub async fn queue_pop(&self) -> crate::Result<Option<JobId>> {
+    pub async fn queue_pop(&self) -> Option<JobId> {
         let mut lock = self.job_queue.write().await;
-        Ok(lock.pop_front())
+        lock.pop_front()
     }
-    pub async fn get_position(&self, other: JobId) -> crate::Result<Option<usize>> {
+    pub async fn queue_cancel(&self, other: JobId) {
+        let mut lock = self.job_queue.write().await;
+        lock.retain(|j| *j == other);
+    }
+    pub async fn get_position(&self, other: JobId) -> Option<usize> {
         let lock = self.job_queue.read().await;
         for (i, job) in lock.iter().enumerate() {
             if *job == other {
-                return Ok(Some(i));
+                return Some(i);
             }
         }
-        Ok(None)
+        None
     }
 
     /// blocks till `job` is at the front of the queue;
@@ -61,22 +67,26 @@ impl Data {
         ctx: crate::Context<'ctx>,
         job: JobId,
     ) -> crate::Result<poise::ReplyHandle<'ctx>> {
-        self.queue_push(job).await?;
         let mut timer = tokio::time::interval(std::time::Duration::from_secs(1));
         let handle = ctx
             .reply(Self::format_queue_position(
                 self.job_queue.read().await.len(),
             ))
             .await?;
+        self.queue_push(job).await;
         loop {
-            let position = self.get_position(job).await?;
+            let position = self.get_position(job).await;
             if let Some(position) = position {
-                handle
+                match handle
                     .edit(
                         ctx,
                         CreateReply::default().content(Self::format_queue_position(position)),
                     )
-                    .await?;
+                    .await
+                {
+                    Ok(_) => continue,
+                    Err(_) => self.queue_cancel(job).await,
+                };
                 timer.tick().await;
                 if position == 0 {
                     break;
@@ -85,7 +95,7 @@ impl Data {
                 return Err("Job removed from queue unexpectedly!".into());
             }
         }
-        if let Some(popped) = self.queue_pop().await? {
+        if let Some(popped) = self.queue_pop().await {
             if popped == job {
                 Ok(handle)
             } else {
