@@ -79,8 +79,14 @@ pub fn resize_media(input: Media, mut x_size: u16, y_size: u16) -> Result<Media,
 
     // TODO: fix transparency on gifs (currently adds a white background)
 
-    // h264 gets very angry if the sizes are not divisible by 2, therefore we must check
+    // Make sure the media isn't a audio file, because we cant resize that.
 
+    if input.media_type == MediaType::Audio {
+        // Cant resize audio.
+        return Err("Cannot resize a audio file.".into());
+    }
+    // h264 gets very angry if the sizes are not divisible by 2, therefore we must check
+    
     // make sure that sucker is even
     if (x_size % 2) == 1 {
         //odd! add one.
@@ -108,21 +114,6 @@ pub fn resize_media(input: Media, mut x_size: u16, y_size: u16) -> Result<Media,
         }
     };
 
-    // Set boundaries for how small and big media can become
-    const MIN_SIZE: u16 = 1;
-    const MAX_SIZE: u16 = 8000;
-
-    // check to make sure the input sizes haven't exceeded our boundaries.
-    if !(x_size <= MAX_SIZE && y_size <= MAX_SIZE && x_size >= MIN_SIZE) {
-        return Err("Invalid media dimensions!".into());
-    }
-
-    // Make sure the media isn't a audio file, because we cant resize that.
-
-    if input.media_type == MediaType::Audio {
-        // Cant resize audio.
-        return Err("Cannot resize a audio file.".into());
-    }
 
     // Media is of a good size, now to process it.
 
