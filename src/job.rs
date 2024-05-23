@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-use std::sync::Arc;
-
 #[derive(Clone, Copy, Debug, bevy_derive::Deref, PartialEq, Eq)]
 pub struct JobId(pub u64);
 
@@ -42,8 +39,14 @@ pub struct JobPart {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum JobType {
-    Resize { width: u16, height: u16 },
-    Caption { text: String },
-    Rotate { rotation: crate::media_helpers::Rotation}
-    // #TODO
+    Resize {
+        width: u16,
+        height: u16,
+    },
+    Caption {
+        text: String,
+    },
+    Rotate {
+        rotation: crate::media_helpers::Rotation,
+    }, // #TODO
 }
