@@ -1,9 +1,9 @@
 # varible for the name of the app
 ARG BINARY_NAME_DEFAULT=artifice
 
-# we use muslrust as a builder to let us link everything together, so we can
-# make a tiny image (as opposed to a 200MB debian:bookworm-slim)
+# we use muslrust as a builder to let us link everything together
 FROM clux/muslrust:stable AS builder
+
 # docker user, from the repo, not sure what it does hehehe -Docjade
 RUN groupadd -g 10001 -r dockergrp && useradd -r -g dockergrp -u 10001 dockeruser
 
@@ -29,8 +29,8 @@ RUN set -x && cargo build --target x86_64-unknown-linux-musl --release
 RUN mkdir -p /build-out
 RUN set -x && cp target/x86_64-unknown-linux-musl/release/$BINARY_NAME /build-out/
 
-# Create a minimal docker image
-FROM scratch
+# Create debian based image
+FROM debian:bookworm-slim
 
 # reimport the app name
 ARG BINARY_NAME_DEFAULT
@@ -41,8 +41,14 @@ ENV RUST_LOG="error,$BINARY_NAME=info"
 
 # Copy the binary
 COPY --from=builder /build-out/$BINARY_NAME /
-# Copy web certs
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# install ffmpeg
+
+RUN apt update
+RUN apt install ffmpeg -y
+# cleanup left behind files
+RUN apt clean
+RUN rm -rf /var/cache/apt/archives /var/lib/apt/lists
 
 
 # These are the enviroment varibles that need to be set.
@@ -51,5 +57,5 @@ ENV TOKEN=""
 # FFMPEG hardware acceleration, defaults to `none`
 ENV HW_ACCEL=""
 
-# run the bot, has to be a direct command since we dont have a shell.
+# run the bot
 CMD ["/artifice"]
