@@ -40,7 +40,7 @@ pub fn caption_media(
     // load in the font
     // TODO: multiple font selection
     let font_open_sans_bold =
-        FontRef::try_from_slice(include_bytes!("../fonts/open-sans/OpenSans-Bold.ttf"))?;
+        FontRef::try_from_slice(include_bytes!("fonts/open-sans/OpenSans-Bold.ttf"))?;
     let fonts = &[font_open_sans_bold];
 
     // now we will layout the text
