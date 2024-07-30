@@ -46,6 +46,11 @@ pub enum MediaType {
     Unknown,
 }
 
+pub enum FFprobeError {
+    UnknownSize,
+    Other(String)
+}
+
 impl MediaType {
     pub fn from(thingie: String) -> Option<MediaType> {
         // dafuq is this
@@ -102,7 +107,13 @@ pub fn resize_media(input: Media, mut x_size: u16, y_size: u16) -> Result<Media,
     if x_size == 0 {
         // need to calculate new size.
         // get the size of input media
-        let (x_media_size, y_media_size): (i64, i64) = get_pixel_size(&input)?;
+        let (x_media_size, y_media_size): (i64, i64) = match get_pixel_size(&input) {
+            Ok(ok) => ok,
+            Err(err) => match err {
+                FFprobeError::UnknownSize => return Err("Could not determine file dimensions.".into()),
+                FFprobeError::Other(ouch) => return Err(ouch.into()),
+            },
+        };
         let aspect_ratio: f32 = x_media_size as f32 / y_media_size as f32;
 
         // now multiply and round to get our new y size
@@ -189,7 +200,7 @@ pub fn new_temp_dir() -> TempDir {
 
 /// get the screen size of a media file
 /// returns (x,y)
-pub fn get_pixel_size(input: &Media) -> Result<(i64, i64), crate::Error> {
+pub fn get_pixel_size(input: &Media) -> Result<(i64, i64), FFprobeError> {
     // ask ffprobe
     let media_info = match ffprobe::ffprobe(&input.file_path.path) {
         // all good
@@ -197,7 +208,7 @@ pub fn get_pixel_size(input: &Media) -> Result<(i64, i64), crate::Error> {
         // something broke
         Err(err) => {
             tracing::info!("ffprobe size failed!");
-            return Err(format!("{:#?}", err).to_string().into());
+            return Err(FFprobeError::UnknownSize);
         }
     };
 

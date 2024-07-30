@@ -9,7 +9,7 @@ use image::{imageops, DynamicImage, ImageBuffer, Rgba};
 
 use crate::{
     ffmpeg_babysitter::ffbabysit,
-    media_helpers::{get_pixel_size, new_temp_media, Media, MediaType},
+    media_helpers::{get_pixel_size, new_temp_media, FFprobeError, Media, MediaType},
 };
 
 pub fn caption_media(
@@ -35,7 +35,13 @@ pub fn caption_media(
     }
 
     // get the size of the main image, so we can determine how wide our caption needs to be
-    let (media_x_res, _media_y_res): (i64, i64) = get_pixel_size(&media)?;
+    let (media_x_res, _media_y_res): (i64, i64) = match get_pixel_size(&media) {
+        Ok(ok) => ok,
+        Err(err) => match err {
+            FFprobeError::UnknownSize => return Err("Could not determine file dimensions.".into()),
+            FFprobeError::Other(ouch) => return Err(ouch.into()),
+        },
+    };
 
     // load in the font
     // TODO: multiple font selection
